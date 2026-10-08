@@ -11,7 +11,7 @@ export default function OrderDetails() {
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState('');
 
-  const load = async () => {
+  const reload = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -24,21 +24,38 @@ export default function OrderDetails() {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await orderService.getById(id);
+        if (!cancelled) setOrder(res.order || res);
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load order');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   const cancel = async () => {
     if (!window.confirm('Cancel this order?')) return;
     try {
       await orderService.cancel(id);
       setMsg('Order cancelled');
-      await load();
+      await reload();
     } catch (err) {
       setError(err.message || 'Failed to cancel');
     }
   };
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="container"><ErrorMessage message={error} onRetry={load} /></div>;
+  if (error) return <div className="container"><ErrorMessage message={error} onRetry={reload} /></div>;
   if (!order) return null;
 
   const items = order.items || [];
