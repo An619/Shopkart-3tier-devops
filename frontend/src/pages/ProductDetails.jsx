@@ -11,7 +11,7 @@ import ProductRating from '../components/ProductRating.jsx';
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { add: addToCart } = useCart();
   const { add: addToWishlist, has: inWishlist } = useWishlist();
 
