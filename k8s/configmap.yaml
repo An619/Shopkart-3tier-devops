@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopkart-config
+  namespace: shopkart
+data:
+  NODE_ENV: "production"
+  PORT: "5000"
+  HOST: "0.0.0.0"
+  DB_HOST: "shopkart-postgres"
+  DB_PORT: "5432"
+  DB_NAME: "shopkart"
+  DB_USER: "shopkart_user"
+  DB_POOL_MAX: "10"
+  JWT_EXPIRES_IN: "7d"
+  BCRYPT_SALT_ROUNDS: "12"
+  CORS_ORIGIN: "http://shopkart.local"
+  BACKEND_URL: "http://shopkart-backend:5000"
+  BACKEND_URL_METRICS: "http://shopkart-backend:5000"
