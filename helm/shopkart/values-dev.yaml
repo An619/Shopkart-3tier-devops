@@ -1,0 +1,23 @@
+# Development overrides — small footprint
+frontend:
+  replicaCount: 1
+  image:
+    tag: dev
+backend:
+  replicaCount: 1
+  image:
+    tag: dev
+postgres:
+  persistence:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "512Mi"
+ingress:
+  host: shopkart.dev.local
+hpa:
+  enabled: false

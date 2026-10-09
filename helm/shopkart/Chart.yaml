@@ -1,0 +1,15 @@
+apiVersion: v2
+name: shopkart
+description: ShopKart — 3-tier e-commerce application (frontend + backend + PostgreSQL)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - shopkart
+  - ecommerce
+  - nodejs
+  - react
+  - postgresql
+maintainers:
+  - name: ShopKart Team
+    email: admin@shopkart.dev

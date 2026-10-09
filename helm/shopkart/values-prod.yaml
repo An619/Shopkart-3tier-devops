@@ -1,0 +1,38 @@
+# Production overrides
+frontend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+backend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+postgres:
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+ingress:
+  host: shopkart.example.com
+  tls:
+    enabled: true
+    secretName: shopkart-tls
+hpa:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10

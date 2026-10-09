@@ -1,0 +1,130 @@
+# ============================================================
+# ShopKart — default Helm values
+# ============================================================
+
+namespace:
+  create: true
+  name: shopkart
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imagePullPolicy: IfNotPresent
+
+# ---------- Frontend ----------
+frontend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: shopkart-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "300m"
+      memory: "256Mi"
+  env:
+    BACKEND_URL: "http://shopkart-backend:5000"
+    BACKEND_URL_METRICS: "http://shopkart-backend:5000"
+
+# ---------- Backend ----------
+backend:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: shopkart-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5000
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  env:
+    NODE_ENV: production
+    PORT: "5000"
+    HOST: "0.0.0.0"
+    DB_HOST: shopkart-postgres
+    DB_PORT: "5432"
+    DB_NAME: shopkart
+    DB_USER: shopkart_user
+    DB_POOL_MAX: "10"
+    JWT_EXPIRES_IN: "7d"
+    BCRYPT_SALT_ROUNDS: "12"
+    CORS_ORIGIN: "http://shopkart.local"
+
+# ---------- Postgres ----------
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  auth:
+    database: shopkart
+    username: shopkart_user
+    password: change_me_in_production
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# ---------- Secrets ----------
+secrets:
+  jwtSecret: change_me_to_a_long_random_secret_min_32_chars
+
+# ---------- Ingress ----------
+ingress:
+  enabled: true
+  className: nginx
+  host: shopkart.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+  tls:
+    enabled: false
+    secretName: shopkart-tls
+
+# ---------- HPA ----------
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ---------- ServiceAccount ----------
+serviceAccount:
+  create: true
+  name: shopkart
+
+# ---------- Pod annotations ----------
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
