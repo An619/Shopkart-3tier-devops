@@ -33,9 +33,5 @@
   },
   "engines": {
     "node": ">=20"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "testTimeout": 15000
   }
 }
