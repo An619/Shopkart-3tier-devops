@@ -1,0 +1,30 @@
+ShopKart has been deployed.
+
+Release:   {{ .Release.Name }}
+Namespace: {{ include "shopkart.namespace" . }}
+Chart:     {{ .Chart.Name }}-{{ .Chart.Version }}
+App:       {{ .Chart.AppVersion }}
+
+Check pods:
+
+  kubectl get pods -n {{ include "shopkart.namespace" . }}
+
+{{- if .Values.ingress.enabled }}
+
+Access the app via Ingress:
+
+  http://{{ .Values.ingress.host }}
+
+{{- else }}
+
+Port-forward:
+
+  kubectl port-forward -n {{ include "shopkart.namespace" . }} svc/shopkart-frontend 8080:{{ .Values.frontend.service.port }}
+
+Then open: http://localhost:8080
+
+{{- end }}
+
+Demo credentials (seeded):
+  Admin: admin@shopkart.dev / Admin@123
+  User:  user@shopkart.dev  / User@123

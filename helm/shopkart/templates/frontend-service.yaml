@@ -1,0 +1,19 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopkart-frontend
+  namespace: {{ include "shopkart.namespace" . }}
+  labels:
+    {{- include "shopkart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    {{- include "shopkart.selectorLabels" (dict "component" "frontend" "context" .) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.frontend.service.port }}
+      targetPort: 80
+      protocol: TCP
+{{- end }}
