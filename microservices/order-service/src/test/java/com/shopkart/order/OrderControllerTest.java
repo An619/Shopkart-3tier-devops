@@ -41,7 +41,7 @@ class OrderControllerTest {
   }
 
   @Test void checkoutIsIdempotentForRepeatedRequestKey() throws Exception {
-    String payload = "{\\"customerId\\":\\"customer-2\\",\\"productIds\\":[1,2]}";
+    String payload = "{\"customerId\":\"customer-2\",\"productIds\":[1,2]}";
     mvc.perform(post("/api/orders").header("Idempotency-Key", "checkout-retry-001")
       .contentType(MediaType.APPLICATION_JSON).content(payload))
       .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
