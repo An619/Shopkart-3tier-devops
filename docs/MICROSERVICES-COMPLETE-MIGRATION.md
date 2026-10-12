@@ -9,12 +9,16 @@
 - NetworkPolicy permits internal traffic to the gateway and Node API ports; the Argo CD Application tracks this feature branch.
 - `main` has not been changed. Review via the draft pull request.
 
+## Data ownership extraction plan
+
+See [DATA-OWNERSHIP-EXTRACTION.md](DATA-OWNERSHIP-EXTRACTION.md) for the source-verified cross-domain database dependencies, safe extraction sequence, cutover gates, and rollback constraints. This is intentionally not a fake database-per-service change: current cart and order code reads or writes catalog tables directly, so changing database names without first removing those dependencies would break user journeys.
+
 ## Still required before calling this a complete production conversion
 
 This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, payment/checkout saga with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain.
 
 ## Validation status
 
-GitHub Actions run [#11](https://github.com/An619/Shopkart-3tier-devops/actions/runs/38295913272) passed on the feature branch. It verified backend lint/tests, frontend lint/tests/build, Compose configuration, Kustomize rendering, built and started the domain Compose stack, smoke-tested health/catalog/categories, verified unauthenticated cart access is rejected, completed registration and login, checked authenticated cart access, and confirmed the identity service returns 404 for the catalog route. This is CI/integration-smoke evidence only; it is not a Kubernetes or Argo CD deployment and does not prove full user-journey parity.
+GitHub Actions runs [#11](https://github.com/An619/Shopkart-3tier-devops/actions/runs/38295913272) and [#13](https://github.com/An619/Shopkart-3tier-devops/actions/runs/38296070452) passed on the feature branch. It verified backend lint/tests, frontend lint/tests/build, Compose configuration, Kustomize rendering, built and started the domain Compose stack, smoke-tested health/catalog/categories, verified unauthenticated cart access is rejected, completed registration and login, checked authenticated cart access, and confirmed the identity service returns 404 for the catalog route. This is CI/integration-smoke evidence only; it is not a Kubernetes or Argo CD deployment and does not prove full user-journey parity.
 
 Before merging, deploy to a disposable cluster and test register/login/profile/catalog/cart/wishlist/checkout/order/admin flows. Then complete independent database ownership and migrations, cross-service contracts, and reliable checkout orchestration. Do not merge the draft PR or remove the monolith until failures are fixed and data parity is verified.
