@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -47,7 +48,17 @@ public class OrderController {
   }
 
   @PostMapping @ResponseStatus(HttpStatus.CREATED)
-  public Order create(@Valid @RequestBody CreateOrderRequest request) {
+  public Order create(@Valid @RequestBody CreateOrderRequest request,
+      @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+    if (idempotencyKey != null && (idempotencyKey.isBlank() || idempotencyKey.length() > 100)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency-Key must contain 1-100 characters");
+    }
+    if (idempotencyKey != null) {
+      List<Order> prior = jdbc.query(
+        "SELECT id,customer_id,product_ids,status,created_at FROM orders WHERE idempotency_key=?",
+        this::map, idempotencyKey);
+      if (!prior.isEmpty()) return prior.get(0);
+    }
     Map<Long, Integer> quantities = request.productIds().stream()
       .collect(Collectors.toMap(id -> id, id -> 1, Integer::sum, LinkedHashMap::new));
     List<String> acquired = new ArrayList<>();
@@ -68,8 +79,17 @@ public class OrderController {
     String ids = request.productIds().stream().map(String::valueOf).collect(Collectors.joining(","));
     Long id;
     try {
-      id = jdbc.queryForObject("INSERT INTO orders(customer_id,product_ids,status) VALUES (?,?,?) RETURNING id",
-        Long.class, request.customerId(), ids, "PENDING");
+      id = jdbc.queryForObject("INSERT INTO orders(customer_id,product_ids,status,idempotency_key) VALUES (?,?,?,?) RETURNING id",
+        Long.class, request.customerId(), ids, "PENDING", idempotencyKey);
+    } catch (DuplicateKeyException duplicate) {
+      releaseAll(acquired);
+      if (idempotencyKey != null) {
+        List<Order> prior = jdbc.query(
+          "SELECT id,customer_id,product_ids,status,created_at FROM orders WHERE idempotency_key=?",
+          this::map, idempotencyKey);
+        if (!prior.isEmpty()) return prior.get(0);
+      }
+      throw duplicate;
     } catch (RuntimeException failure) {
       releaseAll(acquired);
       throw failure;
