@@ -5,7 +5,7 @@
 - Java/Spring Boot Product, Order and Inventory service experiment with their own database names, Compose, Kubernetes resources and Argo CD application.
 - The existing Node/Express API can run bounded domain modes using `SERVICE_NAME`: identity, catalog, cart, wishlist, orders and admin.
 - Local `microservices/domain-compose.yml` runs the React frontend, gateway, PostgreSQL and six domain API processes.
-- Kubernetes Kustomize resources now include the six Node domain Deployments/Services, Nginx gateway, and a separate PostgreSQL StatefulSet initialized from the bundled legacy schema and seed files.
+- Kubernetes Kustomize resources now include the React frontend Deployment/Service, six Node domain Deployments/Services, Nginx gateway, and a separate PostgreSQL StatefulSet initialized from the bundled legacy schema and seed files.
 - NetworkPolicy permits internal traffic to the gateway and Node API ports; the Argo CD Application tracks this feature branch.
 - `main` has not been changed. Review via the draft pull request.
 
