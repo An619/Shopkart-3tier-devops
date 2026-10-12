@@ -128,8 +128,13 @@ async function cancel(userId, orderId) {
     await client.query(
       `UPDATE products p
           SET stock = p.stock + oi.quantity, updated_at = NOW()
-         FROM order_items oi
-        WHERE oi.order_id = $1 AND oi.product_id = p.id`,
+         FROM (
+           SELECT product_id, SUM(quantity)::int AS quantity
+             FROM order_items
+            WHERE order_id = $1
+            GROUP BY product_id
+         ) oi
+        WHERE oi.product_id = p.id`,
       [orderId]
     );
     await client.query('COMMIT');
