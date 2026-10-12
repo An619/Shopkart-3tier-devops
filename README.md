@@ -49,3 +49,7 @@ docker compose down
 The microservices branch is an educational migration foundation, **not yet a production-ready replacement** for the monolith. Service data currently lives in memory and is lost on restart; replicas do not share state. The current frontend is not yet integrated with these service APIs. Persistent service-owned data stores, authentication/authorization, API routing, integration/contract tests, full business workflows, immutable image promotion and end-to-end validation remain required before production claims.
 
 Never commit real credentials, access tokens, passwords, or production secrets. Use Jenkins credentials and your cluster's secret-management approach.
+
+## Full conversion acceptance contract
+
+The complete domain map and required acceptance checklist are documented in [docs/MICROSERVICES-COMPLETE-MIGRATION.md](docs/MICROSERVICES-COMPLETE-MIGRATION.md). The current branch is still an in-progress migration: the initial Product, Order and Inventory prototypes use in-memory data and do not yet replace every monolith feature. Do not treat it as a completed or production-ready conversion until that checklist is implemented and verified.
