@@ -10,6 +10,9 @@ pipeline {
   environment {
     DOCKERHUB_CREDS = credentials('dockerhub-creds')
     IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+    POSTGRES_PASSWORD = 'ci-only-not-a-real-secret'
+    JWT_SECRET = 'ci-only-secret-value-at-least-32-characters'
+    GRAFANA_ADMIN_PASSWORD = 'ci-only-grafana-password'
   }
   stages {
     stage('Checkout') {
