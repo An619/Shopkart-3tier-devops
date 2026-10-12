@@ -1,0 +1,106 @@
+pipeline {
+  agent any
+  options {
+    timestamps()
+    timeout(time: 45, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+  }
+  environment {
+    DOCKERHUB_CREDS = credentials('dockerhub-creds')
+    IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_COMMIT.take(7)}"
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm; sh 'git status --short; git log -1 --oneline' }
+    }
+    stage('Node quality') {
+      parallel {
+        stage('Backend') {
+          steps {
+            dir('backend') {
+              sh 'npm ci --no-audit --no-fund'
+              sh 'npm run lint'
+              sh 'npm test'
+            }
+          }
+        }
+        stage('Frontend') {
+          steps {
+            dir('frontend') {
+              sh 'npm ci --no-audit --no-fund'
+              sh 'npm run lint'
+              sh 'npm test -- --run'
+              sh 'npm run build'
+            }
+          }
+        }
+      }
+    }
+    stage('Java tests and package') {
+      steps {
+        sh 'docker compose -f microservices/docker-compose.yml up -d postgres'
+        sh 'mvn -B -f microservices/pom.xml clean verify'
+      }
+      post { always { sh 'docker compose -f microservices/docker-compose.yml down -v || true' } }
+    }
+    stage('Manifest validation') {
+      steps {
+        sh 'docker compose -f microservices/docker-compose.yml config --quiet'
+        sh 'docker compose -f microservices/domain-compose.yml config --quiet'
+        sh 'kubectl kustomize deploy/kubernetes/microservices > rendered-manifests.yaml'
+        sh 'grep -q "name: order-service" rendered-manifests.yaml'
+        sh 'grep -q "name: inventory-service" rendered-manifests.yaml'
+        sh 'helm lint helm/shopkart'
+        archiveArtifacts artifacts: 'rendered-manifests.yaml', fingerprint: true
+      }
+    }
+    stage('SonarQube analysis') {
+      when { expression { return env.CHANGE_ID == null } }
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          sh 'mvn -B -f microservices/pom.xml sonar:sonar -Dsonar.projectKey=shopkart-microservices'
+        }
+      }
+    }
+    stage('Build container images') {
+      steps {
+        sh """
+          docker build -f backend/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-backend:${IMAGE_TAG} .
+          docker build -f frontend/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-frontend:${IMAGE_TAG} .
+          docker build -f microservices/product-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-product-service:${IMAGE_TAG} microservices
+          docker build -f microservices/order-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-order-service:${IMAGE_TAG} microservices
+          docker build -f microservices/inventory-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-inventory-service:${IMAGE_TAG} microservices
+        """
+      }
+    }
+    stage('Image vulnerability scan') {
+      steps {
+        sh """
+          for image in shopkart-backend shopkart-frontend shopkart-product-service shopkart-order-service shopkart-inventory-service; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --severity HIGH,CRITICAL --exit-code 1 ${DOCKERHUB_CREDS_USR}/$image:${IMAGE_TAG}
+          done
+        """
+      }
+    }
+    stage('Publish immutable images') {
+      when { anyOf { branch 'main'; branch 'feature/microservices-devops' } }
+      steps {
+        sh """
+          echo "$DOCKERHUB_CREDS_PSW" | docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
+          for image in shopkart-backend shopkart-frontend shopkart-product-service shopkart-order-service shopkart-inventory-service; do
+            docker push ${DOCKERHUB_CREDS_USR}/$image:${IMAGE_TAG}
+          done
+          docker logout
+        """
+      }
+    }
+  }
+  post {
+    always {
+      sh 'docker logout || true'
+      cleanWs()
+    }
+  }
+}
