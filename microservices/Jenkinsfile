@@ -9,6 +9,7 @@ pipeline {
   }
   stages {
     stage('Checkout') { steps { checkout scm; sh 'git rev-parse --short HEAD' } }
+    stage('Start Test Database') { steps { dir('microservices') { sh 'docker compose up -d postgres' } } }
     stage('Maven Verify') { steps { dir('microservices') { sh 'mvn -B -ntp clean verify' } } }
     stage('SonarQube Analysis') {
       steps {
@@ -57,5 +58,5 @@ pipeline {
       }
     }
   }
-  post { always { cleanWs() } }
+  post { always { dir('microservices') { sh 'docker compose down -v --remove-orphans || true' }; cleanWs() } }
 }
