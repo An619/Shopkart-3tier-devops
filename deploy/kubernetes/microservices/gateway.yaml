@@ -7,32 +7,18 @@ data:
     server {
       listen 8080;
       server_name _;
-      location = /healthz { access_log off; return 200 "ok\n"; }
-      location /api/products {
-        proxy_pass http://product-service:8081;
-        proxy_set_header Host $host;
-        proxy_set_header X-Request-ID $request_id;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      }
-      location /api/orders {
-        proxy_pass http://order-service:8082;
-        proxy_set_header Host $host;
-        proxy_set_header X-Request-ID $request_id;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      }
-      location /api/inventory {
-        proxy_pass http://inventory-service:8083;
-        proxy_set_header Host $host;
-        proxy_set_header X-Request-ID $request_id;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      }
-      # Strangler migration: routes not migrated yet are temporarily handled by the existing backend.
-      location /api/ {
-        proxy_pass http://backend:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Request-ID $request_id;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      }
+      location = /healthz { access_log off; default_type text/plain; return 200 "ok\\n"; }
+      location /api/auth { proxy_pass http://identity-service:5000; include /etc/nginx/proxy_params; }
+      location /api/users { proxy_pass http://identity-service:5000; include /etc/nginx/proxy_params; }
+      location /api/products { proxy_pass http://catalog-service:5000; include /etc/nginx/proxy_params; }
+      location /api/categories { proxy_pass http://catalog-service:5000; include /etc/nginx/proxy_params; }
+      location /api/reviews { proxy_pass http://catalog-service:5000; include /etc/nginx/proxy_params; }
+      location /api/cart { proxy_pass http://cart-service:5000; include /etc/nginx/proxy_params; }
+      location /api/wishlist { proxy_pass http://wishlist-service:5000; include /etc/nginx/proxy_params; }
+      location /api/orders { proxy_pass http://orders-service:5000; include /etc/nginx/proxy_params; }
+      location /api/admin { proxy_pass http://admin-service:5000; include /etc/nginx/proxy_params; }
+      location = /api/health { proxy_pass http://identity-service:5000/api/health; }
+      location /api/ { return 404; }
     }
 ---
 apiVersion: apps/v1
@@ -59,17 +45,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          command: ["nginx", "-g", "daemon off;"]
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 250m, memory: 128Mi }
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 101
-            capabilities:
-              drop: ["ALL"]
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 3
