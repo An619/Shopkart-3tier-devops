@@ -15,4 +15,6 @@ This is an incremental strangler migration, **not yet a production-ready fully d
 
 ## Validation status
 
-The GitHub files have been updated, but a successful build, test run, Kustomize render, Compose startup, or Kubernetes/Argo CD deployment has **not** been verified from this environment. Before merging, run backend/frontend lint and tests, validate Compose and Kustomize, build/push the image, deploy to a disposable cluster, and test register/login/catalog/cart/checkout/order/admin flows. Do not merge the draft PR or remove the monolith until failures are fixed and data parity is verified.
+GitHub Actions run [#7](https://github.com/An619/Shopkart-3tier-devops/actions/runs/38295710786) passed on the feature branch. It verified backend lint/tests, frontend lint/tests/build, Compose configuration, Kustomize rendering, built and started the domain Compose stack, smoke-tested `/api/health` and `/api/products`, and confirmed the identity service returns 404 for the catalog route. This is CI/integration-smoke evidence only; it is not a Kubernetes or Argo CD deployment and does not prove full user-journey parity.
+
+Before merging, deploy to a disposable cluster and test register/login/profile/catalog/cart/wishlist/checkout/order/admin flows. Then complete independent database ownership and migrations, cross-service contracts, and reliable checkout orchestration. Do not merge the draft PR or remove the monolith until failures are fixed and data parity is verified.
