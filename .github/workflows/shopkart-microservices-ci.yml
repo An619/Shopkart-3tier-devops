@@ -98,6 +98,9 @@ jobs:
           grep -q 'name: orders-service' /tmp/shopkart-rendered.yaml
           grep -q 'name: admin-service' /tmp/shopkart-rendered.yaml
           grep -q 'name: shopkart-frontend' /tmp/shopkart-rendered.yaml
+          grep -q 'name: product-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: order-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: inventory-service' /tmp/shopkart-rendered.yaml
   domain-compose-smoke:
     runs-on: ubuntu-latest
     env:
@@ -117,6 +120,13 @@ jobs:
           curl -fsS http://localhost:8080/api/health
           curl -fsS http://localhost:8080/api/products
           curl -fsS http://localhost:8080/api/categories
+          # New Java APIs are versioned so the existing frontend contract is not silently changed.
+          curl -fsS http://localhost:8080/api/v2/products
+          before=$(curl -fsS http://localhost:8080/api/v2/inventory/1 | jq -r '.quantity')
+          order_response=$(curl -fsS -X POST http://localhost:8080/api/v2/orders -H 'Content-Type: application/json' -d '{"customerId":"ci-checkout","productIds":[1,2]}')
+          test "$(printf '%s' "$order_response" | jq -r '.status')" = "CONFIRMED"
+          after=$(curl -fsS http://localhost:8080/api/v2/inventory/1 | jq -r '.quantity')
+          test "$((before - after))" -eq 1
           unauth_status=$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8080/api/cart)
           test "$unauth_status" = "401"
           email="ci-${GITHUB_RUN_ID}@example.test"
