@@ -3,8 +3,17 @@ kind: Kustomization
 namespace: shopkart-microservices
 resources:
   - postgres.yaml
+  - legacy-postgres.yaml
+  - domain-services.yaml
   - gateway.yaml
   - product-service.yaml
   - order-service.yaml
   - inventory-service.yaml
   - network-policy.yaml
+configMapGenerator:
+  - name: shopkart-legacy-schema
+    files:
+      - legacy-schema.sql=../../../database/schema.sql
+      - legacy-seed.sql=../../../database/seed.sql
+generatorOptions:
+  disableNameSuffixHash: true
