@@ -13,7 +13,7 @@ resources:
 configMapGenerator:
   - name: shopkart-legacy-schema
     files:
-      - legacy-schema.sql=../../../database/schema.sql
-      - legacy-seed.sql=../../../database/seed.sql
+      - legacy-schema.sql=sql/legacy-schema.sql
+      - legacy-seed.sql=sql/legacy-seed.sql
 generatorOptions:
   disableNameSuffixHash: true
