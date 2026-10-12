@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: shopkart-microservices
 resources:
   - postgres.yaml
+  - gateway.yaml
   - product-service.yaml
   - order-service.yaml
   - inventory-service.yaml
