@@ -124,6 +124,8 @@ jobs:
           curl -fsS http://localhost:8080/api/categories
           # New Java APIs are versioned so the existing frontend contract is not silently changed.
           curl -fsS http://localhost:8080/api/v2/products
+          curl -fsS http://localhost:8080/api/v2/inventory/1
+          curl -fsS -X POST http://localhost:8080/api/v2/orders -H 'Content-Type: application/json' -H 'Idempotency-Key: ci-checkout' -d '{"customerId":"ci-checkout","productIds":[1,2]}' | jq -e '.status == "CONFIRMED"'
           before=$(curl -fsS http://localhost:8080/api/v2/inventory/1 | jq -r '.quantity')
           order_response=$(curl -fsS -X POST http://localhost:8080/api/v2/orders -H 'Content-Type: application/json' -d '{"customerId":"ci-checkout","productIds":[1,2]}')
           test "$(printf '%s' "$order_response" | jq -r '.status')" = "CONFIRMED"
