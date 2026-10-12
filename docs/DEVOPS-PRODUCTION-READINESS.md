@@ -46,6 +46,10 @@ docker compose down
 
 The inventory endpoint only seeds products 1–3 in the local schema. Avoid reusing a reservation ID after releasing it.
 
+## Monitoring
+
+The full-stack Compose file starts Prometheus on port 9090 and Grafana on port 3000. Prometheus scrapes the Java services' Spring Boot Actuator metrics endpoint. Grafana provisions a Prometheus data source and a baseline dashboard automatically. Use a private local password for Grafana and never reuse the documented lab examples for any shared environment.
+
 ## Jenkins
 
 Use Jenkinsfile.microservices as a dedicated pipeline while retaining the original monolith Jenkinsfile. Configure Jenkins with:
