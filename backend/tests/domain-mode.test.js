@@ -12,6 +12,7 @@ describe('bounded-context API routing', () => {
   test('identity service exposes identity routes and not catalog routes', async () => {
     process.env.SERVICE_NAME = 'identity';
     jest.resetModules();
+    jest.doMock('../src/database/pool', () => ({ pool: { query: jest.fn().mockResolvedValue({ rows: [{ ok: 1 }] }) }, query: jest.fn() }));
     const app = require('../src/app');
 
     const health = await request(app).get('/api/health');
@@ -24,6 +25,7 @@ describe('bounded-context API routing', () => {
   test('catalog service exposes catalog routes and not cart routes', async () => {
     process.env.SERVICE_NAME = 'catalog';
     jest.resetModules();
+    jest.doMock('../src/database/pool', () => ({ pool: { query: jest.fn().mockResolvedValue({ rows: [{ ok: 1 }] }) }, query: jest.fn() }));
     const app = require('../src/app');
 
     const outsideDomain = await request(app).get('/api/cart');
