@@ -73,7 +73,6 @@ services:
 
   gateway:
     image: nginx:1.27-alpine
-    ports: ["${GATEWAY_PORT:-8080}:80"]
     volumes:
       - ./gateway/domain-gateway.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -83,6 +82,17 @@ services:
       - wishlist-service
       - orders-service
       - admin-service
+    restart: unless-stopped
+    networks: [shopkart]
+
+  frontend:
+    build: { context: ../frontend, dockerfile: Dockerfile }
+    image: ${FRONTEND_IMAGE:-shopkart-frontend}:${IMAGE_TAG:-local}
+    environment:
+      BACKEND_URL: http://gateway:80
+      BACKEND_URL_METRICS: http://identity-service:5000
+    ports: ["${FRONTEND_PORT:-8080}:80"]
+    depends_on: [gateway]
     restart: unless-stopped
     networks: [shopkart]
 
