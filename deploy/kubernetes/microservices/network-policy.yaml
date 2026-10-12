@@ -21,3 +21,7 @@ spec:
           port: 8082
         - protocol: TCP
           port: 8083
+        - protocol: TCP
+          port: 5000
+        - protocol: TCP
+          port: 5432
