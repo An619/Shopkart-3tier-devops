@@ -51,10 +51,12 @@ Before deploying, build and push the backend image from the repository root:
 ```bash
 docker build -t YOUR_DOCKERHUB_USERNAME/shopkart-backend:latest backend
 docker push YOUR_DOCKERHUB_USERNAME/shopkart-backend:latest
+docker build -t YOUR_DOCKERHUB_USERNAME/shopkart-frontend:latest frontend
+docker push YOUR_DOCKERHUB_USERNAME/shopkart-frontend:latest
 ```
 
-Replace the image placeholder in `deploy/kubernetes/microservices/domain-services.yaml`
-with the pushed image. Create secrets outside Git (do not commit real secrets):
+Replace the image placeholders in `deploy/kubernetes/microservices/domain-services.yaml` and
+`deploy/kubernetes/microservices/frontend.yaml` with the pushed images. Create secrets outside Git (do not commit real secrets):
 
 ```bash
 kubectl create namespace shopkart-microservices --dry-run=client -o yaml | kubectl apply -f -
@@ -67,11 +69,11 @@ kubectl apply -k deploy/kubernetes/microservices
 kubectl -n shopkart-microservices get pods,svc
 kubectl -n shopkart-microservices rollout status statefulset/shopkart-legacy-postgres
 kubectl -n shopkart-microservices rollout status deployment/identity-service
-kubectl -n shopkart-microservices port-forward svc/shopkart-gateway 8080:8080
+kubectl -n shopkart-microservices port-forward svc/shopkart-frontend 8080:80
 ```
 
-In another terminal, verify `curl -i http://localhost:8080/api/health` and
-`curl -i http://localhost:8080/api/products`. Argo CD's Application points at
+In another terminal, open `http://localhost:8080` in a browser and verify
+`curl -i http://localhost:8080/api/health` and `curl -i http://localhost:8080/api/products`. Argo CD's Application points at
 the same Kustomize path; ensure the image and external Secret are ready before
 syncing. The SQL bootstrap runs only when the PostgreSQL data volume is first
 initialized; changing the SQL files does not automatically migrate an existing
