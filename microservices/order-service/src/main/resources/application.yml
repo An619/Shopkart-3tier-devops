@@ -1,0 +1,23 @@
+server:
+  port: ${SERVER_PORT:8082}
+spring:
+  application:
+    name: order-service
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+info:
+  app:
+    name: order-service
+    version: 1.0.0
