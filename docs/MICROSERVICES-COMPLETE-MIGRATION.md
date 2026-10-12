@@ -1,15 +1,18 @@
 # ShopKart microservices migration status
 
-## Implemented in the feature branch
+## Implemented on `feature/microservices-devops`
 
-- Java/Spring Boot Product, Order and Inventory service experiment under `microservices/`.
-- PostgreSQL schemas and local Compose for those services.
-- A domain-mode switch in the original Node backend: `SERVICE_NAME=identity|catalog|cart|wishlist|orders|admin`.
-- `microservices/domain-compose.yml` starts those domain API processes behind an Nginx gateway while retaining the existing route contracts.
-- Main branch remains unchanged; review through the draft pull request.
+- Java/Spring Boot Product, Order and Inventory service experiment with their own database names, Compose, Kubernetes resources and Argo CD application.
+- The existing Node/Express API can run bounded domain modes using `SERVICE_NAME`: identity, catalog, cart, wishlist, orders and admin.
+- Local `microservices/domain-compose.yml` runs the React frontend, gateway, PostgreSQL and six domain API processes.
+- Kubernetes Kustomize resources now include the six Node domain Deployments/Services, Nginx gateway, and a separate PostgreSQL StatefulSet initialized from the bundled legacy schema and seed files.
+- NetworkPolicy permits internal traffic to the gateway and Node API ports; the Argo CD Application tracks this feature branch.
+- `main` has not been changed. Review via the draft pull request.
 
-## Not yet safe to call a complete production microservices conversion
+## Still required before calling this a complete production conversion
 
-The domain-mode services still use the legacy shared PostgreSQL schema and shared Node codebase. The separate Java Product/Order/Inventory implementation is not yet wired as the authoritative backend for the frontend, and the domain Compose stack has not been built or tested in this environment. Independent database ownership, schema/data migration, reliable checkout orchestration (idempotency/outbox/saga or compensation), service authentication, production secret management, Kubernetes deployment for every domain, CI gates, and end-to-end verification remain necessary.
+This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, payment/checkout saga with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain.
 
-Use the domain Compose stack as an incremental extraction lab only. Do not merge the PR or decommission the monolith until automated checks and user-journey tests pass.
+## Validation status
+
+The GitHub files have been updated, but a successful build, test run, Kustomize render, Compose startup, or Kubernetes/Argo CD deployment has **not** been verified from this environment. Before merging, run backend/frontend lint and tests, validate Compose and Kustomize, build/push the image, deploy to a disposable cluster, and test register/login/catalog/cart/checkout/order/admin flows. Do not merge the draft PR or remove the monolith until failures are fixed and data parity is verified.
