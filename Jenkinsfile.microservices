@@ -67,8 +67,8 @@ pipeline {
     stage('Build container images') {
       steps {
         sh """
-          docker build -f backend/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-backend:${IMAGE_TAG} .
-          docker build -f frontend/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-frontend:${IMAGE_TAG} .
+          docker build -f Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-backend:${IMAGE_TAG} backend
+          docker build -f Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-frontend:${IMAGE_TAG} frontend
           docker build -f microservices/product-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-product-service:${IMAGE_TAG} microservices
           docker build -f microservices/order-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-order-service:${IMAGE_TAG} microservices
           docker build -f microservices/inventory-service/Dockerfile -t ${DOCKERHUB_CREDS_USR}/shopkart-inventory-service:${IMAGE_TAG} microservices
