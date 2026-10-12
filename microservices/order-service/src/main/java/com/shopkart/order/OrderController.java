@@ -125,9 +125,14 @@ public class OrderController {
   }
 
   @PatchMapping("/{id}/status") public Order updateStatus(@PathVariable("id") long id, @RequestParam("status") String status) {
-    get(id);
-    if (!List.of("PENDING","CONFIRMED","SHIPPED","CANCELLED","RECONCILIATION_REQUIRED").contains(status))
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported status");
+    Order current = get(id);
+    boolean allowed = switch (current.status()) {
+      case "PENDING" -> List.of("CONFIRMED", "CANCELLED").contains(status);
+      case "CONFIRMED" -> List.of("SHIPPED", "CANCELLED").contains(status);
+      default -> false;
+    };
+    if (!allowed) throw new ResponseStatusException(HttpStatus.CONFLICT,
+      "Invalid order status transition from " + current.status() + " to " + status);
     jdbc.update("UPDATE orders SET status=? WHERE id=?", status, id);
     return get(id);
   }
