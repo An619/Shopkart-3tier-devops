@@ -29,11 +29,11 @@ pipeline {
       steps {
         dir('backend') {
           sh 'npm run lint'
-          sh 'npm test -- --runInBand'
+          sh 'npm test'
         }
         dir('frontend') {
           sh 'npm run lint'
-          sh 'npm test -- --run'
+          sh 'npm test'
         }
       }
     }
