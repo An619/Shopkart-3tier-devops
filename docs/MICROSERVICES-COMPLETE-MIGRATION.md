@@ -28,11 +28,11 @@ The Java Inventory service now has a transactional reservation lifecycle:
 - Added integration tests for idempotency, insufficient stock, one-time release and confirmed reservation behavior.
 - CI now includes a Java 21/Maven job that starts the isolated PostgreSQL databases and runs `mvn verify`.
 
-**Important:** The Java Order service does not yet call this Inventory API. The API is a foundation for the next orchestration step, not proof that the existing Node checkout uses database-per-service reservations.
+The Java Order service now calls the Inventory reservation API during checkout. It reserves each distinct product, persists the order, and confirms reservations. A reservation failure before order creation triggers best-effort release of earlier reservations. If confirmation fails after the order exists, the order is marked `RECONCILIATION_REQUIRED`; this avoids falsely reporting success, but does not provide durable saga recovery. The existing Node checkout remains on its separate legacy shared-database path.
 
 ## Still required before calling this a complete production conversion
 
-This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, payment/checkout saga with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain.
+This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, durable payment/checkout saga state with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain. `Jenkinsfile.microservices`, `deploy/argocd/shopkart-microservices-application.yaml`, and `docs/DEVOPS-PRODUCTION-READINESS.md` provide the dedicated CI/CD, GitOps, and operations starting points.
 
 ## Validation status
 
