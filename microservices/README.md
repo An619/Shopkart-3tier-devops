@@ -35,11 +35,13 @@ From the repository root, the full stack includes the existing React app, Nginx 
 ```bash
 export POSTGRES_PASSWORD='local-only-change-this'
 export JWT_SECRET='local-only-secret-at-least-32-characters'
+export GRAFANA_ADMIN_PASSWORD='local-only-grafana-password'
 docker compose -f microservices/domain-compose.yml up --build -d
 docker compose -f microservices/domain-compose.yml ps
 curl -fsS http://localhost:8080/api/health
 curl -fsS http://localhost:8080/api/v2/products
 curl -fsS http://localhost:8080/api/v2/inventory/1
+# Prometheus UI: http://localhost:9090 ; Grafana UI: http://localhost:3000
 curl -i -X POST http://localhost:8080/api/v2/orders \
   -H 'Content-Type: application/json' \
   -d '{"customerId":"demo-customer","productIds":[1,2]}'
