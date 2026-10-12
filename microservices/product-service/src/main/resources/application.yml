@@ -4,7 +4,7 @@ spring:
   application:
     name: product-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/shopkart_products}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5434/shopkart_products}
     username: ${SPRING_DATASOURCE_USERNAME:shopkart}
     password: ${SPRING_DATASOURCE_PASSWORD:shopkart_local_only}
     driver-class-name: org.postgresql.Driver
