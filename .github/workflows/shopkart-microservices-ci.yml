@@ -1,0 +1,72 @@
+name: ShopKart microservices CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/microservices-devops]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+      - name: Test backend
+        working-directory: backend
+        run: npm test
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+  deployment-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          JWT_SECRET: ci-only-secret-value-at-least-32-characters
+        run: docker compose -f microservices/domain-compose.yml config --quiet
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+      - name: Render Kubernetes manifests
+        run: kubectl kustomize deploy/kubernetes/microservices > /tmp/shopkart-rendered.yaml
+      - name: Ensure domain resources are rendered
+        run: |
+          grep -q 'name: identity-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: catalog-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: cart-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: wishlist-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: orders-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: admin-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: shopkart-frontend' /tmp/shopkart-rendered.yaml
