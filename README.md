@@ -53,3 +53,8 @@ Never commit real credentials, access tokens, passwords, or production secrets. 
 ## Full conversion acceptance contract
 
 The complete domain map and required acceptance checklist are documented in [docs/MICROSERVICES-COMPLETE-MIGRATION.md](docs/MICROSERVICES-COMPLETE-MIGRATION.md). The current branch is still an in-progress migration: Product, Order and Inventory have initial persistent APIs, but the full monolith feature set is not yet replaced. Do not treat it as a completed or production-ready conversion until that checklist is implemented and verified.
+
+
+## Domain microservices learning stack
+
+For the incremental Node/Express domain-service extraction (identity, catalog, cart, wishlist, orders, and admin) with the existing React frontend behind an Nginx API gateway, see [`microservices/DOMAIN-SERVICES.md`](microservices/DOMAIN-SERVICES.md). This learning stack currently shares the legacy PostgreSQL schema; it is not yet a fully data-decoupled production microservices architecture. Use the feature branch and do not replace the current main deployment until tests and domain data ownership are complete.
