@@ -35,6 +35,18 @@ spec:
           env:
             - name: SERVER_PORT
               value: "8081"
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/shopkart_products
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: shopkart-database
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopkart-database
+                  key: POSTGRES_PASSWORD
           resources:
             requests: { cpu: 100m, memory: 192Mi }
             limits: { cpu: 500m, memory: 512Mi }
