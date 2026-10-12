@@ -38,6 +38,45 @@ docker compose -f microservices/domain-compose.yml down
 The first boot initializes the database only when the named volume is empty.
 Do not run `down -v` unless you intentionally want to delete local data.
 
+## Kubernetes / Argo CD domain stack
+
+The Kustomize bundle now includes six Node domain Deployments, the Nginx gateway,
+and a **separate legacy PostgreSQL StatefulSet** initialized from the SQL files in
+`deploy/kubernetes/microservices/sql/`. This database is intentionally isolated
+from the Java experiment's PostgreSQL instance, but all six Node domain APIs still
+share this one legacy database.
+
+Before deploying, build and push the backend image from the repository root:
+
+```bash
+docker build -t YOUR_DOCKERHUB_USERNAME/shopkart-backend:latest backend
+docker push YOUR_DOCKERHUB_USERNAME/shopkart-backend:latest
+```
+
+Replace the image placeholder in `deploy/kubernetes/microservices/domain-services.yaml`
+with the pushed image. Create secrets outside Git (do not commit real secrets):
+
+```bash
+kubectl create namespace shopkart-microservices --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n shopkart-microservices create secret generic shopkart-legacy-database \
+  --from-literal=POSTGRES_USER=shopkart_user \
+  --from-literal=POSTGRES_PASSWORD='use-a-unique-strong-password' \
+  --from-literal=JWT_SECRET='use-a-long-random-secret-at-least-32-characters' \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -k deploy/kubernetes/microservices
+kubectl -n shopkart-microservices get pods,svc
+kubectl -n shopkart-microservices rollout status statefulset/shopkart-legacy-postgres
+kubectl -n shopkart-microservices rollout status deployment/identity-service
+kubectl -n shopkart-microservices port-forward svc/shopkart-gateway 8080:8080
+```
+
+In another terminal, verify `curl -i http://localhost:8080/api/health` and
+`curl -i http://localhost:8080/api/products`. Argo CD's Application points at
+the same Kustomize path; ensure the image and external Secret are ready before
+syncing. The SQL bootstrap runs only when the PostgreSQL data volume is first
+initialized; changing the SQL files does not automatically migrate an existing
+volume.
+
 ## Important architecture boundary
 
 This is a **domain-service extraction / strangler step**, not yet a production-grade
