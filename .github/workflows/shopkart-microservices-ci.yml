@@ -83,6 +83,7 @@ jobs:
         env:
           POSTGRES_PASSWORD: ci-only-not-a-real-secret
           JWT_SECRET: ci-only-secret-value-at-least-32-characters
+          GRAFANA_ADMIN_PASSWORD: ci-only-grafana-password
         run: docker compose -f microservices/domain-compose.yml config --quiet
       - uses: azure/setup-kubectl@v4
         with:
@@ -106,6 +107,7 @@ jobs:
     env:
       POSTGRES_PASSWORD: ci-only-not-a-real-secret
       JWT_SECRET: ci-only-secret-value-at-least-32-characters
+      GRAFANA_ADMIN_PASSWORD: ci-only-grafana-password
       FRONTEND_PORT: "8080"
     steps:
       - uses: actions/checkout@v4
