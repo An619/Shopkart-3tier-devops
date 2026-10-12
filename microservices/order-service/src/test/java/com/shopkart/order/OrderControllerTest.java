@@ -1,6 +1,8 @@
 package com.shopkart.order;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class OrderControllerTest {
   @Autowired MockMvc mvc;
+  @Autowired JdbcTemplate jdbc;
+  @BeforeEach void clearOrders() { jdbc.update("DELETE FROM orders"); }
   @Test void createsAndListsOrder() throws Exception {
     mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
       .content("{\"customerId\":\"customer-1\",\"productIds\":[1,2]}"))
