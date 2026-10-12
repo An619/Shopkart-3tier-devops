@@ -44,8 +44,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/shopkart_orders
       SPRING_DATASOURCE_USERNAME: shopkart
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-shopkart_local_only}
+      SHOPKART_INVENTORY_BASE_URL: http://inventory-service:8083
     depends_on:
       postgres: { condition: service_healthy }
+      inventory-service: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8082/actuator/health | grep -q UP"]
       interval: 20s
