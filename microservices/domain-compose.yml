@@ -162,8 +162,40 @@ services:
     restart: unless-stopped
     networks: [shopkart]
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - shopkart_prometheus_data:/prometheus
+    ports: ["9090:9090"]
+    depends_on:
+      product-service: { condition: service_healthy }
+      order-service: { condition: service_healthy }
+      inventory-service: { condition: service_healthy }
+    restart: unless-stopped
+    networks: [shopkart]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in your shell/.env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - shopkart_grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+    restart: unless-stopped
+    networks: [shopkart]
+
 volumes:
   shopkart_domain_pgdata:
+  shopkart_prometheus_data:
+  shopkart_grafana_data:
 
 networks:
   shopkart:
