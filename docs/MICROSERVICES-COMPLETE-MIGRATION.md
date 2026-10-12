@@ -13,6 +13,10 @@
 
 See [DATA-OWNERSHIP-EXTRACTION.md](DATA-OWNERSHIP-EXTRACTION.md) for the source-verified cross-domain database dependencies, safe extraction sequence, cutover gates, and rollback constraints. This is intentionally not a fake database-per-service change: current cart and order code reads or writes catalog tables directly, so changing database names without first removing those dependencies would break user journeys.
 
+## Additional order/inventory safety hardening
+
+The legacy Node order model now performs an atomic conditional stock decrement inside the order transaction. If another checkout consumes the remaining stock after the initial availability check, the order transaction rolls back with a conflict instead of silently clamping stock to zero and overselling. Order cancellation now locks the user's order row, skips terminal/already-cancelled orders, and restores aggregated item quantities in the same transaction, preventing repeated cancellation from restocking the same order twice. These protections improve the current shared-database phase; they do **not** replace the planned Inventory API reservation/saga needed for independently owned databases.
+
 ## Still required before calling this a complete production conversion
 
 This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, payment/checkout saga with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain.
