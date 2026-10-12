@@ -16,7 +16,9 @@ Initial services:
 - Order Service — HTTP port 8082
 - Inventory Service — HTTP port 8083
 
-Read the [migration guide](docs/MICROSERVICES-MIGRATION.md) and [microservices README](microservices/README.md) for setup and pipeline instructions.
+Read the [migration guide](docs/MICROSERVICES-MIGRATION.md), [microservices README](microservices/README.md), and [DevOps readiness/operations blueprint](docs/DEVOPS-PRODUCTION-READINESS.md) for setup, observability, incident response, and remaining acceptance gates.
+
+For the expanded pipeline use `Jenkinsfile.microservices`; the original `Jenkinsfile` remains the legacy monolith pipeline. The full-stack Compose lab adds Prometheus (9090), Grafana (3000), and versioned Java APIs behind the Nginx gateway.
 
 ### Local verification
 
