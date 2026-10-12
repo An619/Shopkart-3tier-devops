@@ -28,6 +28,26 @@ docker compose down
 
 Ports: Product 8081, Order 8082, Inventory 8083.
 
+## Full-stack domain stack
+
+From the repository root, the full stack includes the existing React app, Nginx gateway, six Node domain processes and the Java Product/Order/Inventory APIs:
+
+```bash
+export POSTGRES_PASSWORD='local-only-change-this'
+export JWT_SECRET='local-only-secret-at-least-32-characters'
+docker compose -f microservices/domain-compose.yml up --build -d
+docker compose -f microservices/domain-compose.yml ps
+curl -fsS http://localhost:8080/api/health
+curl -fsS http://localhost:8080/api/v2/products
+curl -fsS http://localhost:8080/api/v2/inventory/1
+curl -i -X POST http://localhost:8080/api/v2/orders \
+  -H 'Content-Type: application/json' \
+  -d '{"customerId":"demo-customer","productIds":[1,2]}'
+docker compose -f microservices/domain-compose.yml down
+```
+
+Legacy frontend paths such as /api/products continue to route to the Node Catalog domain so the UI contract is not silently broken. The new Java APIs are exposed under /api/v2/products, /api/v2/orders and /api/v2/inventory while parity testing continues.
+
 ## Important limitations
 
 Product, Order, and Inventory now have separate PostgreSQL databases for their current data models. This is still not a full replacement for the original app: user/auth, category, cart, payment, review, wishlist, admin, frontend gateway integration, checkout consistency, migration of existing production data, and end-to-end parity are not yet complete. Demo credentials are local-only. Do not route production traffic or remove the monolith until tests and parity checks pass.
