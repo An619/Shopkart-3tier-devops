@@ -5,6 +5,7 @@ resources:
   - postgres.yaml
   - legacy-postgres.yaml
   - domain-services.yaml
+  - frontend.yaml
   - gateway.yaml
   - product-service.yaml
   - order-service.yaml
