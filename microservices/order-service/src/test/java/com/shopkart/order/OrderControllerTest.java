@@ -40,6 +40,18 @@ class OrderControllerTest {
     mvc.perform(get("/api/orders")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
   }
 
+  @Test void checkoutIsIdempotentForRepeatedRequestKey() throws Exception {
+    String payload = "{\\"customerId\\":\\"customer-2\\",\\"productIds\\":[1,2]}";
+    mvc.perform(post("/api/orders").header("Idempotency-Key", "checkout-retry-001")
+      .contentType(MediaType.APPLICATION_JSON).content(payload))
+      .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    mvc.perform(post("/api/orders").header("Idempotency-Key", "checkout-retry-001")
+      .contentType(MediaType.APPLICATION_JSON).content(payload))
+      .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    verify(inventory, times(2)).reserve(anyString(), anyLong(), anyInt());
+    org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class));
+  }
+
   @Test void rejectsEmptyProductIds() throws Exception {
     mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
       .content("{\"customerId\":\"customer-1\",\"productIds\":[]}"))
