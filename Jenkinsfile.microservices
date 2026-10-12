@@ -38,7 +38,7 @@ pipeline {
             dir('frontend') {
               sh 'npm ci --no-audit --no-fund'
               sh 'npm run lint'
-              sh 'npm test -- --run'
+              sh 'npm test'
               sh 'npm run build'
             }
           }
