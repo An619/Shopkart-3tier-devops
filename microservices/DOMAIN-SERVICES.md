@@ -60,9 +60,13 @@ Replace the image placeholders in `deploy/kubernetes/microservices/domain-servic
 
 ```bash
 kubectl create namespace shopkart-microservices --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n shopkart-microservices create secret generic shopkart-database \
+  --from-literal=POSTGRES_USER=shopkart \
+  --from-literal=POSTGRES_PASSWORD='use-a-unique-strong-password' \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n shopkart-microservices create secret generic shopkart-legacy-database \
   --from-literal=POSTGRES_USER=shopkart_user \
-  --from-literal=POSTGRES_PASSWORD='use-a-unique-strong-password' \
+  --from-literal=POSTGRES_PASSWORD='use-a-different-unique-password' \
   --from-literal=JWT_SECRET='use-a-long-random-secret-at-least-32-characters' \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k deploy/kubernetes/microservices
