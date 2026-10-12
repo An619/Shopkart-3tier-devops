@@ -1,4 +1,5 @@
 const { query } = require('../database/pool');
+const ApiError = require('../utils/ApiError');
 
 async function createWithItems(userId, { items, shippingAddress, paymentMethod = 'MOCK', totals }) {
   const client = await require('../database/pool').pool.connect();
@@ -28,10 +29,18 @@ async function createWithItems(userId, { items, shippingAddress, paymentMethod =
          VALUES ($1, $2, $3, $4, $5)`,
         [orderId, it.productId, it.quantity, it.price, it.productName || null]
       );
-      await client.query(
-        'UPDATE products SET stock = GREATEST(stock - $2, 0), updated_at = NOW() WHERE id = $1',
+      // Atomic stock reservation: concurrent checkouts cannot oversell. If stock
+      // changed after the service-level pre-check, roll back the entire order.
+      const stockUpdate = await client.query(
+        `UPDATE products
+            SET stock = stock - $2, updated_at = NOW()
+          WHERE id = $1 AND stock >= $2
+          RETURNING id`,
         [it.productId, it.quantity]
       );
+      if (stockUpdate.rowCount !== 1) {
+        throw ApiError.conflict(`Insufficient stock for product ${it.productId}; checkout was rolled back`);
+      }
     }
 
     await client.query(
@@ -96,12 +105,40 @@ async function findByIdForUser(userId, orderId) {
 }
 
 async function cancel(userId, orderId) {
-  await query(
-    `UPDATE orders
-        SET status = 'cancelled', updated_at = NOW()
-      WHERE id = $1 AND user_id = $2 AND status NOT IN ('shipped', 'delivered')`,
-    [orderId, userId]
-  );
+  const client = await require('../database/pool').pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      'SELECT id, status FROM orders WHERE id = $1 AND user_id = $2 FOR UPDATE',
+      [orderId, userId]
+    );
+    const order = found.rows[0];
+
+    // Missing orders and terminal states are deliberately no-ops. In
+    // particular, repeated cancellation must never restock the same order twice.
+    if (!order || ['shipped', 'delivered', 'cancelled'].includes(order.status)) {
+      await client.query('COMMIT');
+      return;
+    }
+
+    await client.query(
+      `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+      [orderId]
+    );
+    await client.query(
+      `UPDATE products p
+          SET stock = p.stock + oi.quantity, updated_at = NOW()
+         FROM order_items oi
+        WHERE oi.order_id = $1 AND oi.product_id = p.id`,
+      [orderId]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function listAll({ limit = 100, offset = 0 } = {}) {
