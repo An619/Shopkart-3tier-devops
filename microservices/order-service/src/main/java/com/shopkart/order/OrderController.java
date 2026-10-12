@@ -71,9 +71,13 @@ public class OrderController {
         acquired.add(reservationId);
         reservations.put(item.getKey(), reservationId);
       }
+    } catch (ResponseStatusException failure) {
+      releaseAll(acquired);
+      throw failure;
     } catch (RuntimeException failure) {
       releaseAll(acquired);
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Inventory reservation failed; checkout was not created", failure);
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+        "Inventory service is unavailable; checkout was not created", failure);
     }
 
     String ids = request.productIds().stream().map(String::valueOf).collect(Collectors.joining(","));
