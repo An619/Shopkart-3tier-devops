@@ -88,6 +88,17 @@ jobs:
           done
           curl -fsS http://localhost:8080/api/health
           curl -fsS http://localhost:8080/api/products
+          curl -fsS http://localhost:8080/api/categories
+          unauth_status=$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8080/api/cart)
+          test "$unauth_status" = "401"
+          email="ci-${GITHUB_RUN_ID}@example.test"
+          register_response=$(curl -fsS -X POST http://localhost:8080/api/auth/register -H 'Content-Type: application/json' -d "{\"name\":\"CI Test User\",\"email\":\"$email\",\"password\":\"ci-test-password\"}")
+          token=$(printf '%s' "$register_response" | jq -r '.token')
+          test -n "$token" && test "$token" != "null"
+          login_response=$(curl -fsS -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$email\",\"password\":\"ci-test-password\"}")
+          login_token=$(printf '%s' "$login_response" | jq -r '.token')
+          test -n "$login_token" && test "$login_token" != "null"
+          curl -fsS -H "Authorization: Bearer $login_token" http://localhost:8080/api/cart
       - name: Verify identity service does not expose catalog routes
         run: |
           docker compose -f microservices/domain-compose.yml exec -T identity-service node -e "fetch('http://127.0.0.1:5000/api/products').then(r => { console.log('identity /api/products status:', r.status); process.exit(r.status === 404 ? 0 : 1); }).catch(() => process.exit(1))"
