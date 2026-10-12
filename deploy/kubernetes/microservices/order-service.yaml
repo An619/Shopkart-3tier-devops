@@ -20,6 +20,10 @@ spec:
       labels:
         app.kubernetes.io/name: order-service
         app.kubernetes.io/part-of: shopkart
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /actuator/prometheus
+        prometheus.io/port: "8082"
     spec:
       securityContext:
         runAsNonRoot: true
