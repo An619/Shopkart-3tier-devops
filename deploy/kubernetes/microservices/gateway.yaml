@@ -8,6 +8,9 @@ data:
       listen 8080;
       server_name _;
       location = /healthz { access_log off; default_type text/plain; return 200 "ok"; }
+      location /api/v2/products { proxy_pass http://product-service:8081/api/products; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
+      location /api/v2/orders { proxy_pass http://order-service:8082/api/orders; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
+      location /api/v2/inventory { proxy_pass http://inventory-service:8083/api/inventory; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
       location /api/auth { proxy_pass http://identity-service:5000; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
       location /api/users { proxy_pass http://identity-service:5000; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
       location /api/products { proxy_pass http://catalog-service:5000; proxy_set_header Host $host; proxy_set_header X-Request-ID $request_id; proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; proxy_set_header X-Forwarded-Proto $scheme; }
