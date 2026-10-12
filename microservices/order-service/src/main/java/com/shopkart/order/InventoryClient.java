@@ -1,8 +1,10 @@
 package com.shopkart.order;
 
+import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.client.RestClient;
@@ -15,7 +17,10 @@ public class InventoryClient {
 
   public InventoryClient(RestClient.Builder builder,
       @Value("${shopkart.inventory.base-url:http://localhost:8083}") String baseUrl) {
-    this.client = builder.baseUrl(baseUrl).build();
+    SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+    requestFactory.setConnectTimeout(Duration.ofSeconds(2));
+    requestFactory.setReadTimeout(Duration.ofSeconds(3));
+    this.client = builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
   }
 
   public Reservation reserve(String id, long productId, int quantity) {
