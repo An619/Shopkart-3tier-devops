@@ -70,3 +70,30 @@ jobs:
           grep -q 'name: orders-service' /tmp/shopkart-rendered.yaml
           grep -q 'name: admin-service' /tmp/shopkart-rendered.yaml
           grep -q 'name: shopkart-frontend' /tmp/shopkart-rendered.yaml
+  domain-compose-smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-only-not-a-real-secret
+      JWT_SECRET: ci-only-secret-value-at-least-32-characters
+      FRONTEND_PORT: "8080"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start all domain services
+        run: docker compose -f microservices/domain-compose.yml up --build -d
+      - name: Smoke-test gateway and catalog route
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/health
+          curl -fsS http://localhost:8080/api/products
+      - name: Verify identity service does not expose catalog routes
+        run: |
+          docker compose -f microservices/domain-compose.yml exec -T identity-service node -e "fetch('http://127.0.0.1:5000/api/products').then(r => { console.log('identity /api/products status:', r.status); process.exit(r.status === 404 ? 0 : 1); }).catch(() => process.exit(1))"
+      - name: Collect logs if the smoke test fails
+        if: failure()
+        run: docker compose -f microservices/domain-compose.yml logs --no-color --tail=150
+      - name: Stop the test stack
+        if: always()
+        run: docker compose -f microservices/domain-compose.yml down -v
