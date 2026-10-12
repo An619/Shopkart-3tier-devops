@@ -13,7 +13,7 @@ Each service has its own Spring Boot entry point, Actuator health endpoints, Doc
 
 ## Important migration status
 
-This is an **incremental migration foundation**, not yet a complete replacement of every monolith feature. The starter services currently use in-memory demo data so they can be exercised without cloud credentials or a database. Data is lost when a pod restarts, and replicas do not share state. Before production use, replace in-memory stores with service-owned persistence, add authentication/authorization, integration and contract tests, API gateway/routing, migrations, and transactional/event handling. Do not point the current frontend at these services until API compatibility and authentication are completed.
+This remains an **in-progress incremental migration**, not a complete replacement of the monolith. Product, Order and Inventory now use JDBC with separate PostgreSQL databases and schema initialization. Docker Compose and Kubernetes include a PostgreSQL instance for learning. The gateway routes these three API path families to the new services and sends other `/api/` routes to the legacy `backend` service. The current Java APIs are not yet proven response-compatible with the React frontend, and authentication, Category, Cart, Payment, Review, Wishlist, User and Admin services are not migrated. Do not remove the monolith or route real user traffic until API contract, authorization, data migration and end-to-end parity tests pass.
 
 ## Local / Killercoda build
 
@@ -21,6 +21,7 @@ Prerequisites: Java 21, Maven 3.9+, a Docker-compatible builder, and kubectl. No
 
 ```bash
 cd microservices
+docker compose up -d postgres
 mvn -B clean verify
 ```
 
@@ -36,6 +37,8 @@ For a Kubernetes playground where images cannot be imported into the node runtim
 
 ```bash
 kubectl apply -k deploy/kubernetes/microservices
+kubectl rollout status deployment/shopkart-gateway -n shopkart-microservices
+kubectl rollout status statefulset/postgres -n shopkart-microservices
 kubectl rollout status deployment/product-service -n shopkart-microservices
 kubectl rollout status deployment/order-service -n shopkart-microservices
 kubectl rollout status deployment/inventory-service -n shopkart-microservices
@@ -77,9 +80,9 @@ Argo CD is the deployment controller; Jenkins builds, tests, scans and publishes
 
 ## Production-hardening milestones
 
-1. Replace in-memory state with PostgreSQL owned by each service (separate database/schema and migration ownership).
-2. Add an identity/authentication service or retain monolith auth temporarily behind a stable API contract.
-3. Add API gateway/Ingress routes and preserve the frontend's existing API contract.
+1. Finish service-owned persistence, versioned migrations and least-privilege database roles; current learning setup uses separate databases on one PostgreSQL instance.
+2. Implement Identity/User, Category, Cart, Payment, Review, Wishlist and Admin services with the original domain rules.
+3. Verify gateway routes and preserve the frontend API response contract before switching frontend traffic.
 4. Add unit, integration and contract tests; coverage and enforced Sonar quality gates.
 5. Publish immutable image tags and an SBOM; enforce Trivy HIGH/CRITICAL policy after resolving baseline findings.
 6. Add NetworkPolicies, service accounts/RBAC, PodDisruptionBudgets, autoscaling and external secret management.
