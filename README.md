@@ -328,6 +328,8 @@ All containers use readiness / liveness / startup probes and resource requests/l
 
 Full runnable guide is in [`docs/KILLERCODA.md`](docs/KILLERCODA.md). It uses only a plain Kubernetes playground — no AWS.
 
+Real-world walkthrough with working fixes (nerdctl, BuildKit, securityContext patch) is in [`docs/KILLERCODA-NOTES.md`](docs/KILLERCODA-NOTES.md).
+
 ---
 
 ## 14. Helm
