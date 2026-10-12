@@ -60,7 +60,7 @@ class OrderControllerTest {
   }
 
   @Test void releasesEarlierReservationsWhenLaterReservationFails() throws Exception {
-    when(inventory.reserve(anyString(), eq(2L), anyInt())).thenThrow(new RuntimeException("out of stock"));
+    when(inventory.reserve(anyString(), eq(2L), anyInt())).thenThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "out of stock"));
     mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
       .content("{\"customerId\":\"customer-1\",\"productIds\":[1,2]}"))
       .andExpect(status().isConflict());
