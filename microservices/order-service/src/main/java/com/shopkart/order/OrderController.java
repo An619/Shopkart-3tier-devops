@@ -99,12 +99,19 @@ public class OrderController {
       throw failure;
     }
 
+    List<String> confirmed = new ArrayList<>();
     try {
-      for (String reservationId : reservations.values()) inventory.confirm(reservationId);
+      for (String reservationId : reservations.values()) {
+        inventory.confirm(reservationId);
+        confirmed.add(reservationId);
+      }
       jdbc.update("UPDATE orders SET status='CONFIRMED' WHERE id=?", id);
       return get(id);
     } catch (RuntimeException failure) {
       jdbc.update("UPDATE orders SET status='RECONCILIATION_REQUIRED' WHERE id=?", id);
+      List<String> pending = reservations.values().stream()
+        .filter(reservationId -> !confirmed.contains(reservationId)).toList();
+      releaseAll(pending);
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
         "Order created but inventory confirmation was incomplete; reconcile order " + id, failure);
     }
