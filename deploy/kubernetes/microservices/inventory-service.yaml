@@ -43,6 +43,9 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: http }
             initialDelaySeconds: 15
@@ -51,6 +54,9 @@ spec:
             httpGet: { path: /actuator/health/liveness, port: http }
             initialDelaySeconds: 30
             periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
