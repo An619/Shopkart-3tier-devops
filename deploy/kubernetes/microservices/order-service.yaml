@@ -35,6 +35,8 @@ spec:
           env:
             - name: SERVER_PORT
               value: "8082"
+            - name: SHOPKART_INVENTORY_BASE_URL
+              value: http://inventory-service:8083
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://postgres:5432/shopkart_orders
             - name: SPRING_DATASOURCE_USERNAME
