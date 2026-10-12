@@ -5,3 +5,4 @@ resources:
   - product-service.yaml
   - order-service.yaml
   - inventory-service.yaml
+  - network-policy.yaml
