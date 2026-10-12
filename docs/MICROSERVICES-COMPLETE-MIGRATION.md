@@ -17,6 +17,19 @@ See [DATA-OWNERSHIP-EXTRACTION.md](DATA-OWNERSHIP-EXTRACTION.md) for the source-
 
 The legacy Node order model now performs an atomic conditional stock decrement inside the order transaction. If another checkout consumes the remaining stock after the initial availability check, the order transaction rolls back with a conflict instead of silently clamping stock to zero and overselling. Order cancellation now locks the user's order row, skips terminal/already-cancelled orders, and restores aggregated item quantities in the same transaction, preventing repeated cancellation from restocking the same order twice. These protections improve the current shared-database phase; they do **not** replace the planned Inventory API reservation/saga needed for independently owned databases.
 
+## Inventory reservation API added
+
+The Java Inventory service now has a transactional reservation lifecycle:
+
+- `POST /api/inventory/reservations` reserves quantity using an atomic conditional stock update and a caller-supplied reservation ID.
+- Repeating the same reservation ID and payload is idempotent; reusing the ID with a different payload or insufficient stock returns a conflict.
+- `POST /api/inventory/reservations/{reservationId}/confirm` confirms a reservation.
+- `POST /api/inventory/reservations/{reservationId}/release` releases an unconfirmed reservation once and restores its quantity once. A confirmed reservation cannot be released by this endpoint; a real checkout saga needs a separately designed compensating operation.
+- Added integration tests for idempotency, insufficient stock, one-time release and confirmed reservation behavior.
+- CI now includes a Java 21/Maven job that starts the isolated PostgreSQL databases and runs `mvn verify`.
+
+**Important:** The Java Order service does not yet call this Inventory API. The API is a foundation for the next orchestration step, not proof that the existing Node checkout uses database-per-service reservations.
+
 ## Still required before calling this a complete production conversion
 
 This is an incremental strangler migration, **not yet a production-ready fully data-decoupled microservices architecture**. The six Node domains still share the legacy schema and reuse the monolith's Node codebase. The separate Java Product/Order/Inventory implementation is not yet the authoritative backend behind the frontend. Independent database ownership and versioned migrations per domain, cross-domain API/event contracts, service-to-service authorization, payment/checkout saga with idempotency and compensation, production secret management, image pinning, observability, and full end-to-end parity remain.
