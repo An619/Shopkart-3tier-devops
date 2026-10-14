@@ -28,7 +28,7 @@ public class OrderReconciliationWorker {
   }
 
   @Scheduled(fixedDelayString = "${shopkart.order.reconciliation-delay-ms:15000}",
-      initialDelayString = "${shopkart.order.reconciliation-initial-delay-ms:10000}")
+      initialDelayString = "${shopkart.order.reconciliation-initial-delay-ms:60000}")
   public void reconcilePendingOrders() {
     List<PendingOrder> pending = jdbc.query(
       "SELECT id,reservation_ids FROM orders WHERE status='RECONCILIATION_REQUIRED' AND reservation_ids <> '' ORDER BY id LIMIT 50",
