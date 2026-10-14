@@ -9,6 +9,12 @@
 - NetworkPolicy permits internal traffic to the gateway and Node API ports; the Argo CD Application tracks this feature branch.
 - `main` has not been changed. Review via the draft pull request.
 
+## Catalog database extraction foundation
+
+The feature branch now includes `database/catalog/schema.sql` and `backend/src/database/catalog-backfill.js`. The backfill copies category/product/review records with stable IDs, snapshots review-author names, runs target writes in a transaction, and compares source/target row counts. A `migrate:catalog` npm script and CI JavaScript syntax check are wired in, and fresh local PostgreSQL initialization creates `shopkart_catalog`.
+
+This does not switch the Catalog API to the new database and does not prove a live backfill has passed. Before any cutover, run the script against a disposable source/target pair, add field-level reconciliation and API contract tests, move product stock behind Inventory, then remove catalog table joins from Cart/Orders/Admin. Runtime still intentionally uses the shared legacy database.
+
 ## Data ownership extraction plan
 
 See [DATA-OWNERSHIP-EXTRACTION.md](DATA-OWNERSHIP-EXTRACTION.md) for the source-verified cross-domain database dependencies, safe extraction sequence, cutover gates, and rollback constraints. This is intentionally not a fake database-per-service change: current cart and order code reads or writes catalog tables directly, so changing database names without first removing those dependencies would break user journeys.
