@@ -1,0 +1,73 @@
+name: Catalog extraction shadow-runtime validation
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/microservices-devops]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-shadow-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  catalog-shadow-runtime:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-catalog-shadow-password
+      JWT_SECRET: ci-only-secret-value-at-least-32-characters
+      GRAFANA_ADMIN_PASSWORD: ci-only-grafana-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Compose configuration
+        run: docker compose -f microservices/domain-compose.yml --profile catalog-extraction config --quiet
+
+      - name: Start legacy and extracted Catalog runtimes
+        run: docker compose -f microservices/domain-compose.yml --profile catalog-extraction up --build -d postgres catalog-service catalog-extracted-service
+
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in $(seq 1 30); do
+            if docker compose -f microservices/domain-compose.yml exec -T postgres pg_isready -U shopkart_user -d shopkart; then exit 0; fi
+            sleep 2
+          done
+          docker compose -f microservices/domain-compose.yml logs postgres
+          exit 1
+
+      - name: Backfill Catalog into its own database
+        run: docker compose -f microservices/domain-compose.yml exec -T catalog-extracted-service npm run migrate:catalog
+
+      - name: Verify extracted API parity without switching gateway traffic
+        run: |
+          docker compose -f microservices/domain-compose.yml exec -T catalog-extracted-service node -e '
+            async function json(url) {
+              const response = await fetch(url);
+              if (!response.ok) throw new Error(url + " returned HTTP " + response.status);
+              return response.json();
+            }
+            (async () => {
+              const [legacyProducts, extractedProducts, legacyCategories, extractedCategories] = await Promise.all([
+                json("http://catalog-service:5000/api/products?limit=1000"),
+                json("http://127.0.0.1:5000/api/products?limit=1000"),
+                json("http://catalog-service:5000/api/categories"),
+                json("http://127.0.0.1:5000/api/categories")
+              ]);
+              const normalize = rows => rows.map(row => ({ id: row.id, name: row.name })).sort((a,b) => a.id - b.id);
+              if (legacyProducts.total !== extractedProducts.total) throw new Error("Product count mismatch: legacy=" + legacyProducts.total + ", extracted=" + extractedProducts.total);
+              if (JSON.stringify(normalize(legacyProducts.products)) !== JSON.stringify(normalize(extractedProducts.products))) throw new Error("Product IDs/names differ between legacy and extracted Catalog");
+              if (JSON.stringify(normalize(legacyCategories.categories)) !== JSON.stringify(normalize(extractedCategories.categories))) throw new Error("Categories differ between legacy and extracted Catalog");
+              console.log("Catalog shadow parity passed: " + extractedProducts.total + " products; " + extractedCategories.categories.length + " categories.");
+            })().catch(error => { console.error(error); process.exit(1); });
+          '
+
+      - name: Collect logs if validation fails
+        if: failure()
+        run: docker compose -f microservices/domain-compose.yml logs --no-color --tail=150
+
+      - name: Stop validation stack
+        if: always()
+        run: docker compose -f microservices/domain-compose.yml down -v
