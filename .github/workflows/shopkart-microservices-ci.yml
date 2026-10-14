@@ -81,6 +81,52 @@ jobs:
       - name: Stop PostgreSQL
         if: always()
         run: docker compose -f microservices/docker-compose.yml down -v
+  catalog-backfill-smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-catalog-test-password
+      DB_USER: shopkart
+      DB_PASSWORD: ci-catalog-test-password
+      SOURCE_DB_HOST: localhost
+      SOURCE_DB_PORT: "5434"
+      SOURCE_DB_NAME: postgres
+      SOURCE_DB_USER: shopkart
+      SOURCE_DB_PASSWORD: ci-catalog-test-password
+      CATALOG_DB_HOST: localhost
+      CATALOG_DB_PORT: "5434"
+      CATALOG_DB_NAME: shopkart_catalog
+      CATALOG_DB_USER: shopkart
+      CATALOG_DB_PASSWORD: ci-catalog-test-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Start isolated PostgreSQL databases
+        run: docker compose -f microservices/docker-compose.yml up -d postgres
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in $(seq 1 30); do
+            if PGPASSWORD="$DB_PASSWORD" psql -h localhost -p 5434 -U "$DB_USER" -d postgres -c 'SELECT 1' >/dev/null 2>&1; then exit 0; fi
+            sleep 2
+          done
+          docker compose -f microservices/docker-compose.yml logs postgres
+          exit 1
+      - name: Create source fixture
+        run: |
+          PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$DB_USER" -d postgres -f database/schema.sql
+          PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$DB_USER" -d postgres -f database/seed.sql
+      - name: Backfill catalog and verify repeatability
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run migrate:catalog
+          npm run migrate:catalog
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose -f microservices/docker-compose.yml down -v
   deployment-manifests:
     runs-on: ubuntu-latest
     steps:
