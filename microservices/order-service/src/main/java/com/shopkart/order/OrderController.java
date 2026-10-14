@@ -81,10 +81,11 @@ public class OrderController {
     }
 
     String ids = request.productIds().stream().map(String::valueOf).collect(Collectors.joining(","));
+    String reservationIds = String.join(",", reservations.values());
     Long id;
     try {
-      id = jdbc.queryForObject("INSERT INTO orders(customer_id,product_ids,status,idempotency_key) VALUES (?,?,?,?) RETURNING id",
-        Long.class, request.customerId(), ids, "PENDING", idempotencyKey);
+      id = jdbc.queryForObject("INSERT INTO orders(customer_id,product_ids,status,idempotency_key,reservation_ids) VALUES (?,?,?,?,?) RETURNING id",
+        Long.class, request.customerId(), ids, "RECONCILIATION_REQUIRED", idempotencyKey, reservationIds);
     } catch (DuplicateKeyException duplicate) {
       releaseAll(acquired);
       if (idempotencyKey != null) {
@@ -99,21 +100,15 @@ public class OrderController {
       throw failure;
     }
 
-    List<String> confirmed = new ArrayList<>();
     try {
-      for (String reservationId : reservations.values()) {
-        inventory.confirm(reservationId);
-        confirmed.add(reservationId);
-      }
-      jdbc.update("UPDATE orders SET status='CONFIRMED' WHERE id=?", id);
+      for (String reservationId : reservations.values()) inventory.confirm(reservationId);
+      jdbc.update("UPDATE orders SET status='CONFIRMED' WHERE id=? AND status='RECONCILIATION_REQUIRED'", id);
       return get(id);
     } catch (RuntimeException failure) {
       jdbc.update("UPDATE orders SET status='RECONCILIATION_REQUIRED' WHERE id=?", id);
-      List<String> pending = reservations.values().stream()
-        .filter(reservationId -> !confirmed.contains(reservationId)).toList();
-      releaseAll(pending);
+      // Leave reservations intact: confirmation is idempotent and the reconciliation worker retries.
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-        "Order created but inventory confirmation was incomplete; reconcile order " + id, failure);
+        "Order created but inventory confirmation is pending; reconciliation will retry order " + id, failure);
     }
   }
 
