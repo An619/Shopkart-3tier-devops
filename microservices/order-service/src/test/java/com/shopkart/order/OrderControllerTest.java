@@ -63,7 +63,7 @@ class OrderControllerTest {
     });
 
     mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
-      .content("{\\"customerId\\":\\"customer-recovery\\",\\"productIds\\":[1,2]}"))
+      .content("{\"customerId\":\"customer-recovery\",\"productIds\":[1,2]}"))
       .andExpect(status().isServiceUnavailable());
 
     org.junit.jupiter.api.Assertions.assertEquals("RECONCILIATION_REQUIRED",
