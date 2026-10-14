@@ -1,6 +1,6 @@
-# ShopKart domain-service stack. All services currently share the legacy PostgreSQL
-# schema to preserve existing data/API behavior during extraction. Database ownership
-# is the next migration step; do not describe this shared-DB phase as final production architecture.
+# ShopKart domain-service stack. The default Catalog runtime stays on the legacy DB
+# until read/write parity and Inventory ownership are proven. The opt-in profile below
+# exercises Catalog against its own database without changing gateway traffic.
 services:
   postgres:
     image: postgres:15-alpine
@@ -47,6 +47,30 @@ services:
     environment:
       <<: *backend-env
       SERVICE_NAME: catalog
+
+  # Opt-in shadow runtime. Backfill data before querying it. It is intentionally
+  # not a gateway dependency and receives no production traffic until cutover gates pass.
+  catalog-extracted-service:
+    <<: *domain
+    profiles: ["catalog-extraction"]
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: catalog
+      DB_NAME: shopkart_catalog
+      CATALOG_AUTHOR_SNAPSHOT: "true"
+      SOURCE_DB_HOST: postgres
+      SOURCE_DB_PORT: "5432"
+      SOURCE_DB_NAME: ${POSTGRES_DB:-shopkart}
+      SOURCE_DB_USER: ${POSTGRES_USER:-shopkart_user}
+      SOURCE_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell/.env}
+      CATALOG_DB_HOST: postgres
+      CATALOG_DB_PORT: "5432"
+      CATALOG_DB_NAME: shopkart_catalog
+      CATALOG_DB_USER: ${POSTGRES_USER:-shopkart_user}
+      CATALOG_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your shell/.env}
+    depends_on:
+      postgres: { condition: service_healthy }
+    expose: ["5000"]
 
   cart-service:
     <<: *domain
