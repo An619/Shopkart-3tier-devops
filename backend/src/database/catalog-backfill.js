@@ -77,8 +77,41 @@ async function main() {
         throw new Error(table + ' row-count mismatch: source=' + sourceCounts[table] + ', catalog=' + targetCounts[table]);
       }
     }
+
+    // Row counts alone can hide stale or incorrectly copied records. Compare every
+    // migrated field in deterministic ID order before committing the backfill.
+    const targetRows = {
+      categories: (await client.query(
+        'SELECT id,name,description,created_at,updated_at FROM categories ORDER BY id'
+      )).rows,
+      products: (await client.query(
+        'SELECT id,name,description,price,discount,stock,image_url,category_id,created_at,updated_at FROM products ORDER BY id'
+      )).rows,
+      reviews: (await client.query(
+        'SELECT id,product_id,user_id,author_name,rating,title,comment,created_at FROM reviews ORDER BY id'
+      )).rows,
+    };
+    const expectedRows = {
+      categories: categories.rows,
+      products: products.rows,
+      reviews: reviews.rows,
+    };
+    const normalize = (rows) => rows.map((row) => Object.fromEntries(
+      Object.entries(row).map(([key, value]) => [
+        key,
+        value instanceof Date ? value.toISOString() : value,
+      ])
+    ));
+    for (const table of Object.keys(expectedRows)) {
+      const expected = JSON.stringify(normalize(expectedRows[table]));
+      const actual = JSON.stringify(normalize(targetRows[table]));
+      if (expected !== actual) {
+        throw new Error(table + ' field-level reconciliation failed; transaction will roll back');
+      }
+    }
+
     await client.query('COMMIT');
-    console.log(JSON.stringify({ status: 'verified', sourceCounts, targetCounts }, null, 2));
+    console.log(JSON.stringify({ status: 'verified', verification: 'row-counts-and-all-fields', sourceCounts, targetCounts }, null, 2));
   } catch (error) {
     if (client) await client.query('ROLLBACK').catch(() => {});
     console.error('Catalog backfill failed; source database was not modified.', error);
