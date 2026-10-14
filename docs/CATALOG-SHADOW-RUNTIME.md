@@ -17,15 +17,16 @@ docker compose -f microservices/domain-compose.yml --profile catalog-extraction 
 docker compose -f microservices/domain-compose.yml exec -T catalog-extracted-service npm run migrate:catalog
 ```
 
-The backfill copies categories, products and reviews to `shopkart_catalog` and checks
-row counts. The dedicated GitHub Actions workflow then compares the legacy and extracted
+The shadow service mounts `database/catalog/schema.sql` into the container so the backfill
+can initialize its target schema. The backfill copies categories, products and reviews to
+`shopkart_catalog` and checks row counts. The dedicated GitHub Actions workflow then compares the legacy and extracted
 Catalog API product IDs/names and category IDs/names after backfill. It uses a disposable
 database and destroys the Compose volumes at the end.
 
 To stop the local test stack:
 
 ```bash
-docker compose -f microservices/domain-compose.yml down
+docker compose -f microservices/domain-compose.yml --profile catalog-extraction down
 ```
 
 For a fully disposable local test, use `down -v` only if you are certain the named
