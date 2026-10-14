@@ -38,6 +38,9 @@ jobs:
           docker compose -f microservices/domain-compose.yml logs postgres
           exit 1
 
+      - name: Seed a review fixture for shadow API parity
+        run: |
+          docker compose -f microservices/domain-compose.yml exec -T postgres psql -U shopkart_user -d shopkart -v ON_ERROR_STOP=1 -c "INSERT INTO reviews (product_id, user_id, rating, title, comment) SELECT p.id, u.id, 5, 'CI catalog review', 'Catalog shadow parity fixture' FROM products p CROSS JOIN users u WHERE p.id = (SELECT MIN(id) FROM products) AND u.email = 'user@shopkart.dev' ON CONFLICT (product_id, user_id) DO UPDATE SET rating = EXCLUDED.rating, title = EXCLUDED.title, comment = EXCLUDED.comment"
       - name: Backfill Catalog into its own database
         run: docker compose -f microservices/domain-compose.yml exec -T catalog-extracted-service npm run migrate:catalog
 
@@ -56,11 +59,29 @@ jobs:
                 json("http://catalog-service:5000/api/categories"),
                 json("http://127.0.0.1:5000/api/categories")
               ]);
-              const normalize = rows => rows.map(row => ({ id: row.id, name: row.name })).sort((a,b) => a.id - b.id);
+              const normalizeProducts = rows => rows.map(row => ({
+                id: row.id, name: row.name, description: row.description, price: row.price,
+                discount: row.discount, stock: row.stock, imageUrl: row.imageUrl,
+                categoryId: row.categoryId, categoryName: row.categoryName
+              })).sort((a,b) => a.id - b.id);
+              const normalizeCategories = rows => rows.map(row => ({
+                id: row.id, name: row.name, description: row.description, productCount: row.productCount
+              })).sort((a,b) => a.id - b.id);
               if (legacyProducts.total !== extractedProducts.total) throw new Error("Product count mismatch: legacy=" + legacyProducts.total + ", extracted=" + extractedProducts.total);
-              if (JSON.stringify(normalize(legacyProducts.products)) !== JSON.stringify(normalize(extractedProducts.products))) throw new Error("Product IDs/names differ between legacy and extracted Catalog");
-              if (JSON.stringify(normalize(legacyCategories.categories)) !== JSON.stringify(normalize(extractedCategories.categories))) throw new Error("Categories differ between legacy and extracted Catalog");
-              console.log("Catalog shadow parity passed: " + extractedProducts.total + " products; " + extractedCategories.categories.length + " categories.");
+              if (JSON.stringify(normalizeProducts(legacyProducts.products)) !== JSON.stringify(normalizeProducts(extractedProducts.products))) throw new Error("Product fields differ between legacy and extracted Catalog");
+              if (JSON.stringify(normalizeCategories(legacyCategories.categories)) !== JSON.stringify(normalizeCategories(extractedCategories.categories))) throw new Error("Category fields/product counts differ between legacy and extracted Catalog");
+              const productId = legacyProducts.products[0]?.id;
+              if (productId == null) throw new Error("No product fixture available for review parity");
+              const [legacyReviews, extractedReviews] = await Promise.all([
+                json("http://catalog-service:5000/api/products/" + productId + "/reviews"),
+                json("http://127.0.0.1:5000/api/products/" + productId + "/reviews")
+              ]);
+              const normalizeReviews = rows => rows.map(row => ({
+                id: row.id, rating: row.rating, title: row.title, comment: row.comment,
+                userName: row.userName, createdAt: row.createdAt
+              })).sort((a,b) => a.id - b.id);
+              if (JSON.stringify(normalizeReviews(legacyReviews.reviews)) !== JSON.stringify(normalizeReviews(extractedReviews.reviews))) throw new Error("Review fields/author snapshots differ between legacy and extracted Catalog");
+              console.log("Catalog shadow parity passed: " + extractedProducts.total + " products; " + extractedCategories.categories.length + " categories; " + extractedReviews.reviews.length + " review fixture(s).");
             })().catch(error => { console.error(error); process.exit(1); });
           '
 
