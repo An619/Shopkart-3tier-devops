@@ -17,6 +17,14 @@ and admin flows.
 | Wishlist | `wishlists` / wishlist items; references user and product IDs | Wishlist owns its records and stores external IDs without cross-database foreign keys. Product existence is validated via Catalog API. |
 | Admin | administrative routes mutate multiple legacy domains | Admin becomes an orchestration/API client, not an owner of other domains' tables. |
 
+## Catalog extraction foundation added on the feature branch
+
+- `database/catalog/schema.sql` defines catalog-owned categories, products, and reviews. Review author names are snapshots; user IDs are external identifiers, not cross-database foreign keys.
+- `backend/src/database/catalog-backfill.js` copies categories, products, and reviews from the legacy database into `shopkart_catalog` using ID-preserving upserts inside a target transaction, then compares row counts. It never writes to the source database and fails closed on count mismatch.
+- `microservices/postgres/init/01-databases.sql` now creates `shopkart_catalog` for fresh local Compose volumes. Existing named volumes do not rerun init scripts; create the database manually or use a fresh disposable volume when testing.
+- Run from `backend/` after both databases exist and the DB user can access them: `SOURCE_DB_NAME=shopkart CATALOG_DB_NAME=shopkart_catalog npm run migrate:catalog`. Set `SOURCE_DB_HOST`, `SOURCE_DB_PORT`, `SOURCE_DB_USER`, `SOURCE_DB_PASSWORD`, and the matching `CATALOG_DB_*` values when credentials differ. The current shared Compose user is only a local development convenience, not least-privilege production isolation.
+- This is a backfill foundation, not a cutover. The catalog API still uses legacy shared-database queries, and product stock remains coupled to checkout. Do not point the live catalog process at the new database until contract tests, data reconciliation, API read/write parity, and the Inventory boundary are implemented.
+
 ## Safe implementation sequence
 
 1. **Catalog first:** create versioned catalog migrations for categories, products, and reviews; backfill from the legacy database; add reconciliation counts; switch catalog reads/writes only after parity checks. Keep the legacy database as a rollback source during the cutover window.
