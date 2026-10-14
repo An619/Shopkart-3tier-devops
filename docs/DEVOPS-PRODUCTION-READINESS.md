@@ -75,6 +75,7 @@ The application watches the feature branch and synchronizes the Kustomize path. 
 ## Next acceptance gates
 
 - [ ] Add service-specific database credentials and least-privilege roles; separate databases physically where required.
+- [x] Add CodeQL static security analysis for Java and JavaScript/TypeScript, plus weekly Dependabot updates for npm, Maven, Docker images, and GitHub Actions. Review and remediate findings; workflow files being present does not mean a clean security report.
 - [ ] Remove Node cross-domain SQL dependencies before separating Identity, Catalog, Cart, Wishlist, Orders and Admin data.
 - [x] Persist order reservation IDs and retry idempotent inventory confirmations after a failure/restart.
 - [ ] Add a reservation-intent/outbox before remote reservation, alerting, dead-letter handling, and operator-assisted reconciliation for permanent failures/orphan reservations.
