@@ -11,7 +11,7 @@
 
 ## Catalog database extraction foundation
 
-The feature branch now includes `database/catalog/schema.sql` and `backend/src/database/catalog-backfill.js`. The backfill copies category/product/review records with stable IDs, snapshots review-author names, runs target writes in a transaction, and compares source/target row counts. A `migrate:catalog` npm script and CI JavaScript syntax check are wired in, and fresh local PostgreSQL initialization creates `shopkart_catalog`.
+The feature branch now includes `database/catalog/schema.sql` and `backend/src/database/catalog-backfill.js`. The backfill copies category/product/review records with stable IDs, snapshots review-author names, runs target writes in a transaction, and compares source/target row counts. A `migrate:catalog` npm script and a dedicated CI integration job are wired in; the job seeds a disposable legacy schema and runs the backfill twice to check repeatability. Fresh local PostgreSQL initialization creates `shopkart_catalog`.
 
 This does not switch the Catalog API to the new database and does not prove a live backfill has passed. Before any cutover, run the script against a disposable source/target pair, add field-level reconciliation and API contract tests, move product stock behind Inventory, then remove catalog table joins from Cart/Orders/Admin. Runtime still intentionally uses the shared legacy database.
 
