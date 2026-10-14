@@ -52,6 +52,6 @@ Legacy frontend paths such as /api/products continue to route to the Node Catalo
 
 ## Important limitations
 
-Product, Order, and Inventory now have separate PostgreSQL databases for their current data models. This is still not a full replacement for the original app: user/auth, category, cart, payment, review, wishlist, admin, frontend gateway integration, checkout consistency, migration of existing production data, and end-to-end parity are not yet complete. Demo credentials are local-only. Do not route production traffic or remove the monolith until tests and parity checks pass.
+Product, Order, and Inventory now have separate logical PostgreSQL databases for their current data models. Order checkout persists reservation IDs and retries idempotent inventory confirmations after failures/restarts; a full outbox, dead-letter/manual repair, and orphan-reservation recovery are still missing. This is still not a full replacement for the original app: user/auth, category, cart, payment, review, wishlist, admin, frontend gateway integration, checkout consistency, migration of existing production data, and end-to-end parity are not yet complete. Demo credentials are local-only. Do not route production traffic or remove the monolith until tests and parity checks pass.
 
 See [the migration guide](../docs/MICROSERVICES-MIGRATION.md) for Kubernetes, Killercoda, Jenkins, SonarQube, Docker, and Argo CD setup.
