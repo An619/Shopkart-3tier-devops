@@ -19,8 +19,10 @@ docker compose -f microservices/domain-compose.yml exec -T catalog-extracted-ser
 
 The shadow service mounts `database/catalog/schema.sql` into the container so the backfill
 can initialize its target schema. The backfill copies categories, products and reviews to
-`shopkart_catalog` and checks row counts. The dedicated GitHub Actions workflow then compares the legacy and extracted
-Catalog API product IDs/names and category IDs/names after backfill. It uses a disposable
+`shopkart_catalog` and verifies both row counts and every migrated field before committing.
+CI also injects an unexpected target-only row and confirms the backfill fails closed, then
+removes the fixture and reruns successfully. The dedicated GitHub Actions workflow compares
+the legacy and extracted Catalog API product IDs/names and category IDs/names after backfill. It uses a disposable
 database and destroys the Compose volumes at the end.
 
 To stop the local test stack:
