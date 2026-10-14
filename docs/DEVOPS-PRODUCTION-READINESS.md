@@ -12,7 +12,7 @@ This is a portfolio/lab implementation intended to demonstrate experienced DevOp
 | Identity, Catalog, Cart, Wishlist, Orders, Admin (Node domain processes) | 5000 internally | Legacy shared schema | Transitional strangler extraction |
 | React frontend + Nginx API gateway | 8080 locally | N/A | Existing frontend and route gateway |
 
-The three Java services use separate logical PostgreSQL databases in the local lab. They share one PostgreSQL server in Compose for cost-effective practice; use independently managed databases/credentials for a production deployment. The six Node domain processes still share the legacy schema and reuse the same Node application image. That is a migration stage, not full data isolation.
+The three Java services use separate logical PostgreSQL databases in the local lab. They share one PostgreSQL server in Compose for cost-effective practice; use independently managed databases/credentials for a production deployment. The six Node domain processes still share the legacy schema and reuse the same Node application image. That is a migration stage, not full data isolation. A Catalog-owned schema and repeatable backfill utility have been added as the first extraction foundation; runtime cutover is deliberately not enabled until reconciliation and API parity are proven.
 
 ## Checkout orchestration and recovery
 
