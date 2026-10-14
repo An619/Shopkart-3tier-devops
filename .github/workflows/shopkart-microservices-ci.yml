@@ -124,6 +124,21 @@ jobs:
           npm ci --no-audit --no-fund
           npm run migrate:catalog
           npm run migrate:catalog
+      - name: Verify unexpected target rows fail closed
+        working-directory: backend
+        run: |
+          PGPASSWORD="$CATALOG_DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$CATALOG_DB_USER" -d "$CATALOG_DB_NAME" \
+            -c "INSERT INTO products (id, name, description, price, discount, stock) VALUES (999999, 'Unexpected target-only row', '', 1.00, 0, 0)"
+          if npm run migrate:catalog > /tmp/catalog-negative-test.log 2>&1; then
+            cat /tmp/catalog-negative-test.log
+            echo "Backfill unexpectedly accepted a target-only row"
+            exit 1
+          fi
+          cat /tmp/catalog-negative-test.log
+          grep -q "row-count mismatch" /tmp/catalog-negative-test.log
+          PGPASSWORD="$CATALOG_DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$CATALOG_DB_USER" -d "$CATALOG_DB_NAME" \
+            -c "DELETE FROM products WHERE id = 999999"
+          npm run migrate:catalog
       - name: Stop PostgreSQL
         if: always()
         run: docker compose -f microservices/docker-compose.yml down -v
