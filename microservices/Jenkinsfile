@@ -1,0 +1,62 @@
+pipeline {
+  agent { label 'maven-docker' }
+  options { timestamps(); timeout(time: 40, unit: 'MINUTES'); disableConcurrentBuilds(); buildDiscarder(logRotator(numToKeepStr: '20')) }
+  environment {
+    REGISTRY = 'docker.io'
+    IMAGE_NAMESPACE = 'YOUR_DOCKERHUB_USERNAME'
+    IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+    SONARQUBE_SERVER = 'SonarQube'
+  }
+  stages {
+    stage('Checkout') { steps { checkout scm; sh 'git rev-parse --short HEAD' } }
+    stage('Start Test Database') { steps { dir('microservices') { sh 'docker compose up -d postgres' } } }
+    stage('Maven Verify') { steps { dir('microservices') { sh 'mvn -B -ntp clean verify' } } }
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv("${SONARQUBE_SERVER}") {
+          dir('microservices') {
+            withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+              sh 'mvn -B -ntp sonar:sonar -Dsonar.projectKey=shopkart-microservices -Dsonar.projectName=ShopKart-Microservices -Dsonar.token=$SONAR_TOKEN'
+            }
+          }
+        }
+      }
+    }
+    stage('Quality Gate') {
+      steps { timeout(time: 5, unit: 'MINUTES') { waitForQualityGate abortPipeline: true } }
+    }
+    stage('Build Images') {
+      steps {
+        sh '''
+          docker build -f microservices/product-service/Dockerfile -t $IMAGE_NAMESPACE/shopkart-product-service:$IMAGE_TAG microservices
+          docker build -f microservices/order-service/Dockerfile -t $IMAGE_NAMESPACE/shopkart-order-service:$IMAGE_TAG microservices
+          docker build -f microservices/inventory-service/Dockerfile -t $IMAGE_NAMESPACE/shopkart-inventory-service:$IMAGE_TAG microservices
+        '''
+      }
+    }
+    stage('Image Scan') {
+      steps {
+        sh '''
+          trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAMESPACE/shopkart-product-service:$IMAGE_TAG
+          trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAMESPACE/shopkart-order-service:$IMAGE_TAG
+          trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAMESPACE/shopkart-inventory-service:$IMAGE_TAG
+        '''
+      }
+    }
+    stage('Push Images') {
+      when { branch 'main' }
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+            docker push $IMAGE_NAMESPACE/shopkart-product-service:$IMAGE_TAG
+            docker push $IMAGE_NAMESPACE/shopkart-order-service:$IMAGE_TAG
+            docker push $IMAGE_NAMESPACE/shopkart-inventory-service:$IMAGE_TAG
+            docker logout
+          '''
+        }
+      }
+    }
+  }
+  post { always { dir('microservices') { sh 'docker compose down -v --remove-orphans || true' }; cleanWs() } }
+}

@@ -1,0 +1,219 @@
+name: ShopKart microservices CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/microservices-devops]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: shopkart-microservices-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Validate catalog backfill script syntax
+        working-directory: backend
+        run: node --check src/database/catalog-backfill.js
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+      - name: Test backend
+        working-directory: backend
+        run: npm test
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+  java-microservices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: microservices/pom.xml
+      - name: Start PostgreSQL test databases
+        run: docker compose -f microservices/docker-compose.yml up -d postgres
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in $(seq 1 30); do
+            if docker compose -f microservices/docker-compose.yml exec -T postgres pg_isready -U shopkart -d postgres; then exit 0; fi
+            sleep 2
+          done
+          docker compose -f microservices/docker-compose.yml logs postgres
+          exit 1
+      - name: Test and package Java services
+        run: mvn -B -f microservices/pom.xml verify
+      - name: Collect database logs if tests fail
+        if: failure()
+        run: docker compose -f microservices/docker-compose.yml logs postgres
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose -f microservices/docker-compose.yml down -v
+  catalog-backfill-smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-catalog-test-password
+      DB_USER: shopkart
+      DB_PASSWORD: ci-catalog-test-password
+      SOURCE_DB_HOST: localhost
+      SOURCE_DB_PORT: "5434"
+      SOURCE_DB_NAME: postgres
+      SOURCE_DB_USER: shopkart
+      SOURCE_DB_PASSWORD: ci-catalog-test-password
+      CATALOG_DB_HOST: localhost
+      CATALOG_DB_PORT: "5434"
+      CATALOG_DB_NAME: shopkart_catalog
+      CATALOG_DB_USER: shopkart
+      CATALOG_DB_PASSWORD: ci-catalog-test-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Start isolated PostgreSQL databases
+        run: docker compose -f microservices/docker-compose.yml up -d postgres
+      - name: Wait for PostgreSQL
+        run: |
+          for attempt in $(seq 1 30); do
+            if PGPASSWORD="$DB_PASSWORD" psql -h localhost -p 5434 -U "$DB_USER" -d postgres -c 'SELECT 1' >/dev/null 2>&1; then exit 0; fi
+            sleep 2
+          done
+          docker compose -f microservices/docker-compose.yml logs postgres
+          exit 1
+      - name: Create source fixture
+        run: |
+          PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$DB_USER" -d postgres -f database/schema.sql
+          PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$DB_USER" -d postgres -f database/seed.sql
+      - name: Backfill catalog and verify repeatability
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run migrate:catalog
+          npm run migrate:catalog
+      - name: Verify unexpected target rows fail closed
+        working-directory: backend
+        run: |
+          PGPASSWORD="$CATALOG_DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$CATALOG_DB_USER" -d "$CATALOG_DB_NAME" \
+            -c "INSERT INTO products (id, name, description, price, discount, stock) VALUES (999999, 'Unexpected target-only row', '', 1.00, 0, 0)"
+          if npm run migrate:catalog > /tmp/catalog-negative-test.log 2>&1; then
+            cat /tmp/catalog-negative-test.log
+            echo "Backfill unexpectedly accepted a target-only row"
+            exit 1
+          fi
+          cat /tmp/catalog-negative-test.log
+          grep -q "row-count mismatch" /tmp/catalog-negative-test.log
+          PGPASSWORD="$CATALOG_DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h localhost -p 5434 -U "$CATALOG_DB_USER" -d "$CATALOG_DB_NAME" \
+            -c "DELETE FROM products WHERE id = 999999"
+          npm run migrate:catalog
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose -f microservices/docker-compose.yml down -v
+  deployment-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-real-secret
+          JWT_SECRET: ci-only-secret-value-at-least-32-characters
+          GRAFANA_ADMIN_PASSWORD: ci-only-grafana-password
+        run: docker compose -f microservices/domain-compose.yml config --quiet
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+      - name: Render Kubernetes manifests
+        run: kubectl kustomize deploy/kubernetes/microservices > /tmp/shopkart-rendered.yaml
+      - name: Ensure domain resources are rendered
+        run: |
+          grep -q 'name: identity-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: catalog-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: cart-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: wishlist-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: orders-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: admin-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: shopkart-frontend' /tmp/shopkart-rendered.yaml
+          grep -q 'name: product-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: order-service' /tmp/shopkart-rendered.yaml
+          grep -q 'name: inventory-service' /tmp/shopkart-rendered.yaml
+  domain-compose-smoke:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci-only-not-a-real-secret
+      JWT_SECRET: ci-only-secret-value-at-least-32-characters
+      GRAFANA_ADMIN_PASSWORD: ci-only-grafana-password
+      FRONTEND_PORT: "8080"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start all domain services
+        run: docker compose -f microservices/domain-compose.yml up --build -d
+      - name: Smoke-test gateway and catalog route
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/health
+          curl -fsS http://localhost:8080/api/products
+          curl -fsS http://localhost:8080/api/categories
+          # New Java APIs are versioned so the existing frontend contract is not silently changed.
+          curl -fsS http://localhost:8080/api/v2/products
+          curl -fsS http://localhost:8080/api/v2/inventory/1
+          curl -fsS -X POST http://localhost:8080/api/v2/orders -H 'Content-Type: application/json' -H 'Idempotency-Key: ci-checkout' -d '{"customerId":"ci-checkout","productIds":[1,2]}' | jq -e '.status == "CONFIRMED"'
+          before=$(curl -fsS http://localhost:8080/api/v2/inventory/1 | jq -r '.quantity')
+          order_response=$(curl -fsS -X POST http://localhost:8080/api/v2/orders -H 'Content-Type: application/json' -d '{"customerId":"ci-checkout","productIds":[1,2]}')
+          test "$(printf '%s' "$order_response" | jq -r '.status')" = "CONFIRMED"
+          after=$(curl -fsS http://localhost:8080/api/v2/inventory/1 | jq -r '.quantity')
+          test "$((before - after))" -eq 1
+          unauth_status=$(curl -sS -o /dev/null -w '%{http_code}' http://localhost:8080/api/cart)
+          test "$unauth_status" = "401"
+          email="ci-${GITHUB_RUN_ID}@example.test"
+          register_response=$(curl -fsS -X POST http://localhost:8080/api/auth/register -H 'Content-Type: application/json' -d "{\"name\":\"CI Test User\",\"email\":\"$email\",\"password\":\"ci-test-password\"}")
+          token=$(printf '%s' "$register_response" | jq -r '.token')
+          test -n "$token" && test "$token" != "null"
+          login_response=$(curl -fsS -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"$email\",\"password\":\"ci-test-password\"}")
+          login_token=$(printf '%s' "$login_response" | jq -r '.token')
+          test -n "$login_token" && test "$login_token" != "null"
+          curl -fsS -H "Authorization: Bearer $login_token" http://localhost:8080/api/cart
+      - name: Verify identity service does not expose catalog routes
+        run: |
+          docker compose -f microservices/domain-compose.yml exec -T identity-service node -e "fetch('http://127.0.0.1:5000/api/products').then(r => { console.log('identity /api/products status:', r.status); process.exit(r.status === 404 ? 0 : 1); }).catch(() => process.exit(1))"
+      - name: Collect logs if the smoke test fails
+        if: failure()
+        run: docker compose -f microservices/domain-compose.yml logs --no-color --tail=150
+      - name: Stop the test stack
+        if: always()
+        run: docker compose -f microservices/domain-compose.yml down -v

@@ -1,0 +1,93 @@
+package com.shopkart.order;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.util.concurrent.atomic.AtomicInteger;
+
+@SpringBootTest
+@AutoConfigureMockMvc
+class OrderControllerTest {
+  @Autowired MockMvc mvc;
+  @Autowired JdbcTemplate jdbc;
+  @MockBean InventoryClient inventory;
+  @Autowired OrderReconciliationWorker reconciliationWorker;
+
+  @BeforeEach void clearOrders() {
+    jdbc.update("DELETE FROM orders");
+    when(inventory.reserve(anyString(), anyLong(), anyInt())).thenAnswer(call ->
+      new InventoryClient.Reservation(call.getArgument(0), call.getArgument(1), call.getArgument(2), "RESERVED"));
+    when(inventory.confirm(anyString())).thenAnswer(call ->
+      new InventoryClient.Reservation(call.getArgument(0), 1L, 1, "CONFIRMED"));
+    when(inventory.release(anyString())).thenAnswer(call ->
+      new InventoryClient.Reservation(call.getArgument(0), 1L, 1, "RELEASED"));
+  }
+
+  @Test void createsAndListsOrder() throws Exception {
+    mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+      .content("{\"customerId\":\"customer-1\",\"productIds\":[1,2]}"))
+      .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    verify(inventory, times(2)).reserve(anyString(), anyLong(), anyInt());
+    verify(inventory, times(2)).confirm(anyString());
+    mvc.perform(get("/api/orders")).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
+  }
+
+  @Test void checkoutIsIdempotentForRepeatedRequestKey() throws Exception {
+    String payload = "{\"customerId\":\"customer-2\",\"productIds\":[1,2]}";
+    mvc.perform(post("/api/orders").header("Idempotency-Key", "checkout-retry-001")
+      .contentType(MediaType.APPLICATION_JSON).content(payload))
+      .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    mvc.perform(post("/api/orders").header("Idempotency-Key", "checkout-retry-001")
+      .contentType(MediaType.APPLICATION_JSON).content(payload))
+      .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
+    verify(inventory, times(2)).reserve(anyString(), anyLong(), anyInt());
+    org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class));
+  }
+
+
+  @Test void retriesPersistedCheckoutAfterConfirmationFailure() throws Exception {
+    AtomicInteger attempts = new AtomicInteger();
+    when(inventory.confirm(anyString())).thenAnswer(call -> {
+      if (attempts.getAndIncrement() == 0) throw new IllegalStateException("simulated inventory timeout");
+      return new InventoryClient.Reservation(call.getArgument(0), 1L, 1, "CONFIRMED");
+    });
+
+    mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+      .content("{\"customerId\":\"customer-recovery\",\"productIds\":[1,2]}"))
+      .andExpect(status().isServiceUnavailable());
+
+    org.junit.jupiter.api.Assertions.assertEquals("RECONCILIATION_REQUIRED",
+      jdbc.queryForObject("SELECT status FROM orders ORDER BY id DESC LIMIT 1", String.class));
+    reconciliationWorker.reconcilePendingOrders();
+    org.junit.jupiter.api.Assertions.assertEquals("CONFIRMED",
+      jdbc.queryForObject("SELECT status FROM orders ORDER BY id DESC LIMIT 1", String.class));
+    verify(inventory, atLeast(3)).confirm(anyString());
+    verify(inventory, never()).release(anyString());
+  }
+
+  @Test void rejectsEmptyProductIds() throws Exception {
+    mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+      .content("{\"customerId\":\"customer-1\",\"productIds\":[]}"))
+      .andExpect(status().isBadRequest());
+    verifyNoInteractions(inventory);
+  }
+
+  @Test void releasesEarlierReservationsWhenLaterReservationFails() throws Exception {
+    when(inventory.reserve(anyString(), eq(2L), anyInt())).thenThrow(new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT, "out of stock"));
+    mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+      .content("{\"customerId\":\"customer-1\",\"productIds\":[1,2]}"))
+      .andExpect(status().isConflict());
+    verify(inventory).release(anyString());
+    org.junit.jupiter.api.Assertions.assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class));
+  }
+}

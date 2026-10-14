@@ -1,436 +1,62 @@
 # ShopKart — 3-Tier E-Commerce DevOps Project
 
-> A production-style 3-tier e-commerce application (Frontend → Backend API → PostgreSQL) built end-to-end to demonstrate a complete DevOps lifecycle: **Git → GitHub → Jenkins → Docker → Docker Hub → Kubernetes → Helm → AWS EKS → Prometheus/Grafana**.
+> A Flipkart-inspired learning project using an original brand. This repository's default branch preserves the original 3-tier application. The microservices migration is developed separately so the original app remains available.
 
-This is a **portfolio + interview project**. It is designed so the *same* application code runs on:
+## Branches
 
-1. **Laptop** (Vite dev server + Node dev server + local Postgres)
-2. **Docker Compose** (three containers on one host)
-3. **Killercoda Kubernetes** (free playground, no AWS required)
-4. **AWS EKS** (real cloud, provisioned with Terraform)
+- **main** — original ShopKart 3-tier application.
+- **feature/microservices-devops** — incremental microservices migration foundation with Java 21, Spring Boot, Maven, Docker, Jenkins, SonarQube, Kubernetes, and Argo CD configuration.
 
-No copyrighted branding, logos, or code from any real e-commerce company is used. All products, categories, and images are fictional.
+[Open the microservices branch](https://github.com/An619/Shopkart-3tier-devops/tree/feature/microservices-devops)
 
----
+## Microservices branch
 
-## Table of Contents
+Initial services:
+- Product Service — HTTP port 8081
+- Order Service — HTTP port 8082
+- Inventory Service — HTTP port 8083
 
-- [1. Project Overview](#1-project-overview)
-- [2. Architecture](#2-architecture)
-- [3. Features](#3-features)
-- [4. Technology Stack](#4-technology-stack)
-- [5. Repository Structure](#5-repository-structure)
-- [6. Prerequisites](#6-prerequisites)
-- [7. Local Setup](#7-local-setup)
-- [8. Docker Setup](#8-docker-setup)
-- [9. Docker Compose](#9-docker-compose)
-- [10. GitHub](#10-github)
-- [11. Jenkins CI/CD](#11-jenkins-cicd)
-- [12. Kubernetes](#12-kubernetes)
-- [13. Killercoda](#13-killercoda)
-- [14. Helm](#14-helm)
-- [15. AWS + EKS + Terraform](#15-aws--eks--terraform)
-- [16. Monitoring](#16-monitoring)
-- [17. Security](#17-security)
-- [18. Troubleshooting](#18-troubleshooting)
-- [19. Cleanup](#19-cleanup)
-- [20. Interview Preparation](#20-interview-preparation)
-- [21. License](#21-license)
+Read the [migration guide](docs/MICROSERVICES-MIGRATION.md), [microservices README](microservices/README.md), and [DevOps readiness/operations blueprint](docs/DEVOPS-PRODUCTION-READINESS.md) for setup, observability, incident response, and remaining acceptance gates.
 
----
+For the expanded pipeline use `Jenkinsfile.microservices`; the original `Jenkinsfile` remains the legacy monolith pipeline. The full-stack Compose lab adds Prometheus (9090), Grafana (3000), and versioned Java APIs behind the Nginx gateway.
 
-## 1. Project Overview
+### Local verification
 
-**ShopKart** is a fictional online marketplace where users can browse products across categories such as Mobiles, Laptops, Electronics, Fashion, Home Appliances, Books, and Accessories. Users can register, log in, search, filter, add items to a cart or wishlist, checkout through a **simulated payment** flow, and view order history. Admins can manage products, inventory, categories, orders, and users through an admin dashboard.
-
-The **application is realistic** enough to be interviewable, and **small enough** to deploy on a free Killercoda Kubernetes cluster before moving to AWS EKS.
-
-### Why this project exists
-
-| Goal | How ShopKart delivers it |
-|---|---|
-| Show 3-tier separation | React SPA ↔ Express REST API ↔ PostgreSQL |
-| Show containerization | Multi-stage Dockerfiles for both app tiers |
-| Show local orchestration | `docker-compose.yml` with healthchecks + volumes |
-| Show CI/CD | Jenkins Declarative Pipeline + GitHub webhook |
-| Show Kubernetes | Raw manifests **and** a Helm chart |
-| Show cloud | Terraform-provisioned VPC + EKS + managed node group |
-| Show observability | kube-prometheus-stack + custom app metrics |
-| Show DevSecOps | Trivy scan, non-root containers, secrets, RBAC |
-
----
-
-## 2. Architecture
-
-### 2.1 Application (Runtime) Architecture
-
-```mermaid
-flowchart TB
-    U[User / Browser]
-    ING[Ingress<br/>NGINX or AWS ALB]
-    FE[Frontend Pod<br/>React + Nginx :80]
-    BE[Backend Pod<br/>Node/Express :5000]
-    DB[(PostgreSQL<br/>StatefulSet :5432)]
-    PVC[(PersistentVolumeClaim)]
-
-    U -->|HTTPS| ING
-    ING -->|/| FE
-    ING -->|/api| BE
-    FE -->|REST /api| BE
-    BE -->|pg protocol| DB
-    DB --- PVC
-```
-
-### 2.2 DevOps / Delivery Pipeline
-
-```mermaid
-flowchart LR
-    DEV[Developer]
-    GH[GitHub]
-    JK[Jenkins]
-    DH[(Docker Hub)]
-    K8S[Kubernetes / EKS]
-    PG[Prometheus + Grafana]
-
-    DEV -->|git push| GH
-    GH -->|webhook| JK
-    JK -->|build+test| JK
-    JK -->|docker push| DH
-    JK -->|helm upgrade| K8S
-    K8S --> PG
-```
-
-### 2.3 Monitoring
-
-```mermaid
-flowchart LR
-    K8S[Kubernetes]
-    NE[node-exporter]
-    KSM[kube-state-metrics]
-    PROM[Prometheus]
-    GRAF[Grafana]
-
-    K8S --> NE
-    K8S --> KSM
-    NE --> PROM
-    KSM --> PROM
-    PROM --> GRAF
-```
-
-### 2.4 AWS Infrastructure (Phase 11–12)
-
-```mermaid
-flowchart TB
-    IGW[Internet Gateway]
-    subgraph VPC["VPC 10.0.0.0/16"]
-        subgraph PUB["Public Subnets (2 AZs)"]
-            NAT[NAT Gateway]
-            ALB[AWS Load Balancer]
-        end
-        subgraph PRIV["Private Subnets (2 AZs)"]
-            NG[EKS Managed Node Group<br/>t3.medium x2]
-        end
-    end
-    IGW --> ALB
-    ALB --> NG
-    NG --> NAT
-    NAT --> IGW
-```
-
----
-
-## 3. Features
-
-### 3.1 User Features
-
-- Register / Login / Logout
-- Profile management
-- Browse products by category
-- Search products
-- Filter products (price, rating, availability)
-- Product details page
-- Add / remove / update cart
-- Wishlist
-- Address management
-- Checkout with **simulated payment**
-- Order history and details
-- Order status tracking
-- Product reviews and star ratings
-
-### 3.2 Admin Features
-
-- Admin login (role-gated)
-- Dashboard with basic sales metrics
-- Create / update / delete products
-- Manage inventory (stock levels)
-- Manage categories
-- View users
-- View orders
-- Update order status
-
-### 3.3 Mock Payment Flow
-
-```
-Cart  →  Checkout  →  Mock Payment (always "succeeds")  →  Order Created  →  Confirmation
-```
-
-> **Note:** This is a **simulated payment system**. No real payment gateway is integrated. The `payments` table records the mock transaction for realism.
-
----
-
-## 4. Technology Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React 18 + Vite + React Router + Axios + Nginx |
-| Backend | Node.js 20 + Express + JWT + bcrypt + `pg` |
-| Database | PostgreSQL 15 |
-| Containers | Docker (multi-stage), Docker Compose |
-| CI/CD | Jenkins (Declarative Pipeline) + GitHub Webhook |
-| Registry | Docker Hub |
-| Orchestration | Kubernetes (Killercoda → AWS EKS) |
-| Packaging | Helm 3 |
-| IaC | Terraform (AWS provider) |
-| Monitoring | Prometheus + Grafana (`kube-prometheus-stack`) |
-| Security | Trivy, non-root containers, K8s Secrets, RBAC |
-
----
-
-## 5. Repository Structure
-
-```
-shopkart-3tier-devops/
-├── frontend/            # React + Vite SPA
-├── backend/             # Node/Express REST API
-├── database/            # schema.sql, seed.sql, migrations/
-├── docker/              # postgres + nginx helper configs
-├── k8s/                 # raw Kubernetes manifests
-├── helm/shopkart/       # Helm chart
-├── jenkins/             # Jenkins image + casc config
-├── terraform/           # AWS VPC + EKS provisioning
-├── monitoring/          # Prometheus + Grafana values + dashboards
-├── scripts/             # helper scripts
-├── tests/               # smoke + load tests
-├── docs/                # deep-dive documentation
-├── docker-compose.yml
-├── Jenkinsfile
-├── .gitignore
-├── .dockerignore
-├── .env.example
-├── LICENSE
-└── README.md
-```
-
----
-
-## 6. Prerequisites
-
-| Tool | Version |
-|---|---|
-| Git | ≥ 2.30 |
-| Node.js | ≥ 20 |
-| npm | ≥ 10 |
-| Docker | ≥ 24 |
-| Docker Compose | v2 (`docker compose`) |
-| kubectl | ≥ 1.28 |
-| Helm | ≥ 3.13 |
-| Terraform | ≥ 1.6 |
-| AWS CLI | v2 |
-
----
-
-## 7. Local Setup
+Requirements: Java 21, Maven 3.9+, Docker Engine and Docker Compose.
 
 ```bash
-git clone https://github.com/<your-user>/shopkart-3tier-devops.git
-cd shopkart-3tier-devops
-
-cp .env.example .env
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
+git checkout feature/microservices-devops
+cd microservices
+mvn -B clean verify
+docker compose up --build -d
+docker compose ps
+curl http://localhost:8081/actuator/health
+curl http://localhost:8081/api/products
+curl http://localhost:8082/actuator/health
+curl http://localhost:8083/api/inventory/1
+docker compose down
 ```
 
-Then run frontend and backend separately (Phase 2 & 3 will provide scripts).
+### Learning and deployment order
 
----
+1. Run Maven tests and Docker Compose locally.
+2. Build/publish the three images to a registry you control.
+3. Deploy the Kubernetes manifests on Killercoda first; AWS is not required for this learning stage.
+4. Configure Jenkins agents, credentials, Maven, SonarQube and Docker image scanning.
+5. Configure Argo CD to sync the reviewed Kubernetes manifests from Git.
+6. Only after the same manifests work on Killercoda, adapt and deploy to a real Kubernetes cluster or AWS EKS.
 
-## 8. Docker Setup
+## Scope and maturity notice
 
-- **Frontend image:** multi-stage `node:20-alpine` → `nginx:alpine`
-- **Backend image:** `node:20-alpine` with non-root user
-- Both images are small and non-root.
+The microservices branch is an educational migration foundation, **not yet a production-ready replacement** for the monolith. Product, Order and Inventory now use separate PostgreSQL databases in the learning setup, and an API gateway routes those path families while forwarding unmigrated routes to the legacy backend. The frontend API contract is not yet verified; Identity/User, Category, Cart, Payment, Review, Wishlist and Admin domains, secure production secrets/database roles, data migration, checkout consistency, and end-to-end parity tests remain required before the monolith can be retired.
 
----
+Never commit real credentials, access tokens, passwords, or production secrets. Use Jenkins credentials and your cluster's secret-management approach.
 
-## 9. Docker Compose
+## Full conversion acceptance contract
 
-```bash
-docker compose up -d          # start stack
-docker compose ps             # list services
-docker compose logs -f        # follow logs
-docker compose down           # stop, keep volume
-docker compose down -v        # stop, delete volume (wipes DB)
-```
+The complete domain map and required acceptance checklist are documented in [docs/MICROSERVICES-COMPLETE-MIGRATION.md](docs/MICROSERVICES-COMPLETE-MIGRATION.md). The current branch is still an in-progress migration: Product, Order and Inventory have initial persistent APIs, but the full monolith feature set is not yet replaced. Do not treat it as a completed or production-ready conversion until that checklist is implemented and verified.
 
-Service names: `frontend`, `backend`, `postgres`.
 
----
+## Domain microservices learning stack
 
-## 10. GitHub
-
-```bash
-git init
-git add .
-git commit -m "chore: initial commit"
-git branch -M main
-git remote add origin https://github.com/<your-user>/shopkart-3tier-devops.git
-git push -u origin main
-```
-
-**Never commit:** GitHub PAT, AWS keys, Docker Hub password, JWT secret, production DB password.
-
----
-
-## 11. Jenkins CI/CD
-
-Pipeline stages:
-
-```
-Checkout → Install → Lint → Test → Build FE → Build BE →
-Docker Build → Image Scan (Trivy) → Push → Deploy → Verify
-```
-
-Credentials required in Jenkins (see Phase 7):
-
-- `dockerhub-creds` (Username/Password)
-- `kubeconfig-creds` (Secret file)
-- `github-webhook-secret` (Secret text)
-
----
-
-## 12. Kubernetes
-
-Raw manifests under `k8s/`. Objects:
-
-- Namespace `shopkart`
-- ConfigMap + Secret
-- Frontend Deployment + Service
-- Backend Deployment + Service
-- Postgres StatefulSet + Service + PVC
-- Ingress
-- HPA
-
-All containers use readiness / liveness / startup probes and resource requests/limits.
-
----
-
-## 13. Killercoda
-
-Full runnable guide is in [`docs/KILLERCODA.md`](docs/KILLERCODA.md). It uses only a plain Kubernetes playground — no AWS.
-
-Real-world walkthrough with working fixes (nerdctl, BuildKit, securityContext patch) is in [`docs/KILLERCODA-NOTES.md`](docs/KILLERCODA-NOTES.md).
-
----
-
-## 14. Helm
-
-```bash
-helm lint helm/shopkart
-helm template shopkart helm/shopkart
-helm install shopkart helm/shopkart -n shopkart --create-namespace
-helm upgrade shopkart helm/shopkart -n shopkart
-helm rollback shopkart 1 -n shopkart
-helm uninstall shopkart -n shopkart
-```
-
-Environment overlays: `values-dev.yaml`, `values-prod.yaml`.
-
----
-
-## 15. AWS + EKS + Terraform
-
-```bash
-cd terraform
-terraform init
-terraform validate
-terraform plan -out=tfplan
-terraform apply tfplan
-
-aws eks update-kubeconfig --region us-east-1 --name shopkart-eks
-kubectl get nodes
-helm upgrade --install shopkart helm/shopkart -n shopkart --create-namespace
-```
-
-Full guide: [`docs/AWS-EKS.md`](docs/AWS-EKS.md) and [`docs/TERRAFORM.md`](docs/TERRAFORM.md).
-
----
-
-## 16. Monitoring
-
-```bash
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install kube-prom prometheus-community/kube-prometheus-stack \
-  -n monitoring --create-namespace \
-  -f monitoring/values-prometheus.yaml
-```
-
-Grafana dashboards are version-controlled in `monitoring/dashboards/`.
-
----
-
-## 17. Security
-
-- Non-root containers
-- Multi-stage builds → minimal runtime images
-- Trivy image scan in Jenkins (fails pipeline on CRITICAL)
-- Kubernetes Secrets for DB password + JWT secret
-- Jenkins Credentials for all registry / cluster / cloud auth
-- JWT + bcrypt for auth
-- Input validation on all write endpoints
-- RBAC + least-privilege IAM for EKS
-
----
-
-## 18. Troubleshooting
-
-Full guide: [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
-
-Covers: `ImagePullBackOff`, `CrashLoopBackOff`, Pending pods, DB connection failure, Ingress failures, PVC Pending, probe failures, Jenkins / Docker / Terraform errors.
-
----
-
-## 19. Cleanup
-
-**Local:**
-
-```bash
-docker compose down -v
-```
-
-**Killercoda:**
-
-```bash
-kubectl delete namespace shopkart
-```
-
-**AWS:**
-
-```bash
-cd terraform
-terraform destroy
-```
-
-See [`docs/AWS-EKS.md`](docs/AWS-EKS.md) for details on ensuring no orphaned load balancers.
-
----
-
-## 20. Interview Preparation
-
-See [`docs/INTERVIEW-QUESTIONS.md`](docs/INTERVIEW-QUESTIONS.md) for 20 beginner + 20 intermediate + 20 advanced questions with answers, all tied to this project.
-
----
-
-## 21. License
-
-MIT — see [LICENSE](LICENSE).
+For the incremental Node/Express domain-service extraction (identity, catalog, cart, wishlist, orders, and admin) with the existing React frontend behind an Nginx API gateway, see [`microservices/DOMAIN-SERVICES.md`](microservices/DOMAIN-SERVICES.md). This learning stack currently shares the legacy PostgreSQL schema; it is not yet a fully data-decoupled production microservices architecture. Use the feature branch and do not replace the current main deployment until tests and domain data ownership are complete.

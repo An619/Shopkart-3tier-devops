@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shopkart-microservices
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/An619/Shopkart-3tier-devops.git
+    targetRevision: feature/microservices-devops
+    path: deploy/kubernetes/microservices
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shopkart-microservices
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

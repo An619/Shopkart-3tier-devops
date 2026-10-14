@@ -1,0 +1,78 @@
+pipeline {
+  agent { label 'node20-docker' }
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
+  environment {
+    COMPOSE_FILE = 'microservices/domain-compose.yml'
+    POSTGRES_DB = 'shopkart'
+    POSTGRES_USER = 'shopkart_user'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Install dependencies') {
+      steps {
+        dir('backend') { sh 'npm ci --no-audit --no-fund' }
+        dir('frontend') { sh 'npm ci --no-audit --no-fund' }
+      }
+    }
+
+    stage('Lint and unit tests') {
+      steps {
+        dir('backend') {
+          sh 'npm run lint'
+          sh 'npm test'
+        }
+        dir('frontend') {
+          sh 'npm run lint'
+          sh 'npm test'
+        }
+      }
+    }
+
+    stage('Validate Compose') {
+      steps {
+        withEnv([
+          'POSTGRES_PASSWORD=ci-only-not-for-production',
+          'JWT_SECRET=ci-only-secret-at-least-32-characters-long',
+          'FRONTEND_PORT=18080'
+        ]) {
+          sh 'docker compose -f "$COMPOSE_FILE" config --quiet'
+        }
+      }
+    }
+
+    stage('Build service images') {
+      steps {
+        withEnv([
+          'POSTGRES_PASSWORD=ci-only-not-for-production',
+          'JWT_SECRET=ci-only-secret-at-least-32-characters-long',
+          'FRONTEND_PORT=18080'
+        ]) {
+          sh 'docker compose -f "$COMPOSE_FILE" build --pull'
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      withEnv([
+        'POSTGRES_PASSWORD=ci-only-not-for-production',
+        'JWT_SECRET=ci-only-secret-at-least-32-characters-long',
+        'FRONTEND_PORT=18080'
+      ]) {
+        sh 'docker compose -f "$COMPOSE_FILE" down --remove-orphans || true'
+      }
+      cleanWs()
+    }
+  }
+}
