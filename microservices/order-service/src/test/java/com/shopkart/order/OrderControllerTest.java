@@ -13,6 +13,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -20,6 +21,7 @@ class OrderControllerTest {
   @Autowired MockMvc mvc;
   @Autowired JdbcTemplate jdbc;
   @MockBean InventoryClient inventory;
+  @Autowired OrderReconciliationWorker reconciliationWorker;
 
   @BeforeEach void clearOrders() {
     jdbc.update("DELETE FROM orders");
@@ -50,6 +52,27 @@ class OrderControllerTest {
       .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("CONFIRMED"));
     verify(inventory, times(2)).reserve(anyString(), anyLong(), anyInt());
     org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM orders", Integer.class));
+  }
+
+
+  @Test void retriesPersistedCheckoutAfterConfirmationFailure() throws Exception {
+    AtomicInteger attempts = new AtomicInteger();
+    when(inventory.confirm(anyString())).thenAnswer(call -> {
+      if (attempts.getAndIncrement() == 0) throw new IllegalStateException("simulated inventory timeout");
+      return new InventoryClient.Reservation(call.getArgument(0), 1L, 1, "CONFIRMED");
+    });
+
+    mvc.perform(post("/api/orders").contentType(MediaType.APPLICATION_JSON)
+      .content("{\\"customerId\\":\\"customer-recovery\\",\\"productIds\\":[1,2]}"))
+      .andExpect(status().isServiceUnavailable());
+
+    org.junit.jupiter.api.Assertions.assertEquals("RECONCILIATION_REQUIRED",
+      jdbc.queryForObject("SELECT status FROM orders ORDER BY id DESC LIMIT 1", String.class));
+    reconciliationWorker.reconcilePendingOrders();
+    org.junit.jupiter.api.Assertions.assertEquals("CONFIRMED",
+      jdbc.queryForObject("SELECT status FROM orders ORDER BY id DESC LIMIT 1", String.class));
+    verify(inventory, atLeast(3)).confirm(anyString());
+    verify(inventory, never()).release(anyString());
   }
 
   @Test void rejectsEmptyProductIds() throws Exception {
