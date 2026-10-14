@@ -7,16 +7,18 @@ This is a portfolio/lab implementation intended to demonstrate experienced DevOp
 | Component | Port | Data store | State |
 |---|---:|---|---|
 | Product Service (Spring Boot) | 8081 | shopkart_products | Initial API, tests, actuator |
-| Order Service (Spring Boot) | 8082 | shopkart_orders | Checkout calls Inventory reservation API |
+| Order Service (Spring Boot) | 8082 | shopkart_orders | Inventory checkout + persisted reservation IDs + scheduled confirmation retry |
 | Inventory Service (Spring Boot) | 8083 | shopkart_inventory | Atomic reservation/confirm/release API |
 | Identity, Catalog, Cart, Wishlist, Orders, Admin (Node domain processes) | 5000 internally | Legacy shared schema | Transitional strangler extraction |
 | React frontend + Nginx API gateway | 8080 locally | N/A | Existing frontend and route gateway |
 
 The three Java services use separate logical PostgreSQL databases in the local lab. They share one PostgreSQL server in Compose for cost-effective practice; use independently managed databases/credentials for a production deployment. The six Node domain processes still share the legacy schema and reuse the same Node application image. That is a migration stage, not full data isolation.
 
-## Checkout orchestration
+## Checkout orchestration and recovery
 
-Order Service reserves each distinct product using a unique reservation ID, writes a pending order, then confirms reservations. If reservation fails before order creation, it releases acquired reservations in reverse order. If confirmation fails after order creation, the order is marked RECONCILIATION_REQUIRED and returns HTTP 503. This is a basic saga foundation, not a fully durable saga: production work must persist saga steps/outbox events, retry transient errors, expose reconciliation tooling, and define compensation for confirmed reservations.
+Order Service reserves each distinct product using a unique reservation ID and persists those IDs with a RECONCILIATION_REQUIRED order before attempting remote confirmation. The inventory confirmation endpoint is idempotent, so a scheduled worker retries confirmations after a request failure or Order Service restart and marks the order CONFIRMED when all confirmations succeed. If reservation fails before order creation, already acquired reservations are released in reverse order.
+
+This is a durable recovery foundation, not a complete production saga/outbox: there is no dead-letter queue or operator resolution endpoint yet; retries are bounded per sweep but can repeat indefinitely; a process crash between reserving stock and inserting the order can still leave an orphan reservation. Add a durable reservation-intent/outbox before reservation, alerting, dead-letter/manual repair, and explicit compensation for confirmed inventory before production.
 
 ## Local smoke test
 
@@ -74,11 +76,12 @@ The application watches the feature branch and synchronizes the Kustomize path. 
 
 - [ ] Add service-specific database credentials and least-privilege roles; separate databases physically where required.
 - [ ] Remove Node cross-domain SQL dependencies before separating Identity, Catalog, Cart, Wishlist, Orders and Admin data.
-- [ ] Move order saga state to durable storage and add retry/reconciliation/dead-letter handling.
+- [x] Persist order reservation IDs and retry idempotent inventory confirmations after a failure/restart.
+- [ ] Add a reservation-intent/outbox before remote reservation, alerting, dead-letter handling, and operator-assisted reconciliation for permanent failures/orphan reservations.
 - [ ] Add authn/authz between internal services, rate limits, request IDs and audit logs.
 - [ ] Add contract tests and end-to-end tests against the frontend/API gateway, including rollback and concurrent-stock cases.
 - [ ] Add schema migration tooling (Flyway/Liquibase) instead of relying on startup schema SQL.
-- [ ] Add OpenTelemetry tracing, Prometheus scraping, Grafana dashboards and actionable alerts.
+- [ ] Add OpenTelemetry tracing, Prometheus scraping, Grafana dashboards and actionable alerts for stuck reconciliation.
 - [ ] Use external secret management, signed/pinned images, SBOM, admission policies and image scanning remediation.
 - [ ] Run load, failover, backup/restore and disaster-recovery exercises.
 - [ ] Validate manifests and deploy in Killercoda before any paid EKS cluster.
@@ -87,7 +90,7 @@ The application watches the feature branch and synchronizes the Kustomize path. 
 
 1. Check kubectl get pods,svc,events -n shopkart-microservices.
 2. Inspect kubectl logs deploy/order-service -n shopkart-microservices --since=15m and the Inventory deployment.
-3. Compare Order Service RECONCILIATION_REQUIRED records with inventory reservation statuses; do not blindly re-run checkout.
+3. Inspect orders in RECONCILIATION_REQUIRED; the worker retries confirmations automatically. Investigate repeated warnings and inventory reservation state before manual intervention.
 4. Verify database readiness, connection counts, and available stock before replaying a request.
 5. Roll back the GitOps commit/image tag through Git, let Argo CD reconcile, and verify readiness plus API smoke tests.
 6. Record timeline, impact, root cause, detection gap, and preventive actions in a blameless postmortem.
